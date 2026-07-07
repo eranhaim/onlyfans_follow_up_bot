@@ -179,6 +179,25 @@ class TelegramService:
             "first_name": me.first_name,
         }
 
+    async def send_test_to_first_chat(self, message: str = " test") -> dict:
+        client = await self.get_client()
+        if client is None:
+            raise ValueError("Telegram not connected")
+
+        async for dialog in client.iter_dialogs(limit=1):
+            entity = dialog.entity
+            sent = await client.send_message(entity, message)
+            name = dialog.name or dialog.title or str(dialog.id)
+            return {
+                "ok": True,
+                "chat_id": dialog.id,
+                "chat_name": name,
+                "message": message,
+                "message_id": sent.id,
+            }
+
+        raise ValueError("No chats found on this account")
+
     async def run_follow_ups(self) -> int:
         client = await self.get_client()
         if client is None:

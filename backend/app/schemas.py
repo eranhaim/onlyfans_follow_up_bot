@@ -49,6 +49,10 @@ class TelegramSignIn(BaseModel):
     password: str | None = None
 
 
+class TelegramTestSend(BaseModel):
+    message: str = " test"
+
+
 class ConversationOut(BaseModel):
     id: int
     telegram_user_id: int

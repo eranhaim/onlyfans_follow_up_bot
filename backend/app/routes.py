@@ -15,6 +15,7 @@ from app.schemas import (
     TelegramAccountOut,
     TelegramSendCode,
     TelegramSignIn,
+    TelegramTestSend,
 )
 from app.config import settings
 from app.telegram_service import telegram_service
@@ -173,3 +174,11 @@ async def telegram_sign_in(body: TelegramSignIn) -> dict:
 async def run_follow_ups_now() -> dict:
     sent = await telegram_service.run_follow_ups()
     return {"sent": sent}
+
+
+@router.post("/telegram/test-send-first", dependencies=[Depends(require_admin)])
+async def test_send_first_chat(body: TelegramTestSend = TelegramTestSend()) -> dict:
+    try:
+        return await telegram_service.send_test_to_first_chat(body.message)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
