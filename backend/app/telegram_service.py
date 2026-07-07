@@ -153,7 +153,7 @@ class TelegramService:
 
         db = SessionLocal()
         try:
-            account = db.query(TelegramAccount).order_by(TelegramAccount.id).first()
+            account = db.query(TelegramAccount).filter(TelegramAccount.phone == phone).one_or_none()
             if account is None:
                 account = TelegramAccount(name="Model", phone=phone)
                 db.add(account)
@@ -197,6 +197,32 @@ class TelegramService:
             }
 
         raise ValueError("No chats found on this account")
+
+    async def remove_account(self, account_id: int) -> None:
+        db = SessionLocal()
+        try:
+            account = db.query(TelegramAccount).filter(TelegramAccount.id == account_id).one_or_none()
+            if account is None:
+                raise ValueError("Account not found")
+
+            conversation_ids = [
+                row[0]
+                for row in db.query(Conversation.id).filter(Conversation.account_id == account_id).all()
+            ]
+            if conversation_ids:
+                db.query(SentMessageLog).filter(SentMessageLog.conversation_id.in_(conversation_ids)).delete(
+                    synchronize_session=False
+                )
+                db.query(Conversation).filter(Conversation.account_id == account_id).delete(
+                    synchronize_session=False
+                )
+
+            db.delete(account)
+            db.commit()
+        finally:
+            db.close()
+
+        await self.disconnect()
 
     async def run_follow_ups(self) -> int:
         client = await self.get_client()

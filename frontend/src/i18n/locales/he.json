@@ -79,6 +79,19 @@
     "phonePlaceholder": "+972501234567",
     "sendCode": "שלח קוד התחברות",
     "codeLabel": "קוד מטלגרם",
-    "verify": "אימות וחיבור"
+    "verify": "אימות וחיבור",
+    "linkedAccounts": "חשבונות מקושרים",
+    "noAccounts": "אין חשבונות מקושרים עדיין.",
+    "colPhone": "טלפון",
+    "colName": "שם",
+    "colStatus": "סטטוס",
+    "colAdded": "נוסף",
+    "statusLinked": "מקושר",
+    "statusStored": "שמור",
+    "remove": "הסר",
+    "removeConfirm": "להסיר את החשבון {{phone}} מהמערכת? כל שיחות המעקב שלו יימחקו.",
+    "removed": "החשבון הוסר מהמערכת.",
+    "removeFailed": "הסרת החשבון נכשלה",
+    "addAccountHint": "חברו חשבון מודל נוסף או התחברו מחדש לחשבון קיים."
   }
 }

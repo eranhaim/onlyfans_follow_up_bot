@@ -34,6 +34,7 @@ class TelegramAccountOut(BaseModel):
     name: str
     phone: str | None
     is_connected: bool
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 

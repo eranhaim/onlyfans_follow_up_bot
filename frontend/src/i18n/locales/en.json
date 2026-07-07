@@ -79,6 +79,19 @@
     "phonePlaceholder": "+1234567890",
     "sendCode": "Send login code",
     "codeLabel": "Code from Telegram",
-    "verify": "Verify & connect"
+    "verify": "Verify & connect",
+    "linkedAccounts": "Linked accounts",
+    "noAccounts": "No linked accounts yet.",
+    "colPhone": "Phone",
+    "colName": "Name",
+    "colStatus": "Status",
+    "colAdded": "Added",
+    "statusLinked": "Linked",
+    "statusStored": "Stored",
+    "remove": "Remove",
+    "removeConfirm": "Remove account {{phone}} from the system? All of its follow-up conversations will be deleted.",
+    "removed": "Account removed from the system.",
+    "removeFailed": "Failed to remove account",
+    "addAccountHint": "Connect another model account or sign in again to an existing one."
   }
 }

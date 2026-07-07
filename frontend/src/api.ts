@@ -58,6 +58,14 @@ export type Conversation = {
   opted_out: boolean;
 };
 
+export type TelegramAccount = {
+  id: number;
+  name: string;
+  phone: string | null;
+  is_connected: boolean;
+  created_at: string;
+};
+
 export const api = {
   login: (password: string) =>
     request<{ token: string }>("/api/auth/login", {
@@ -90,6 +98,11 @@ export const api = {
 
   telegramStatus: () =>
     request<{ connected: boolean; username?: string; first_name?: string }>("/api/telegram/status"),
+
+  listTelegramAccounts: () => request<TelegramAccount[]>("/api/telegram/accounts"),
+
+  deleteTelegramAccount: (id: number) =>
+    request<{ ok: boolean }>(`/api/telegram/accounts/${id}`, { method: "DELETE" }),
 
   sendCode: (phone: string) =>
     request<{ phone_code_hash: string }>("/api/telegram/send-code", {

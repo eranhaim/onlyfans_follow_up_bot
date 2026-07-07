@@ -142,9 +142,23 @@ def opt_out_conversation(conversation_id: int, db: Session = Depends(get_db)) ->
     return {"ok": True}
 
 
+@router.get("/telegram/accounts", response_model=list[TelegramAccountOut], dependencies=[Depends(require_admin)])
+def list_telegram_accounts(db: Session = Depends(get_db)) -> list[TelegramAccount]:
+    return db.query(TelegramAccount).order_by(TelegramAccount.created_at.desc()).all()
+
+
 @router.get("/telegram/account", response_model=TelegramAccountOut | None, dependencies=[Depends(require_admin)])
 def get_telegram_account(db: Session = Depends(get_db)) -> TelegramAccount | None:
     return db.query(TelegramAccount).order_by(TelegramAccount.id).first()
+
+
+@router.delete("/telegram/accounts/{account_id}", dependencies=[Depends(require_admin)])
+async def delete_telegram_account(account_id: int) -> dict:
+    try:
+        await telegram_service.remove_account(account_id)
+        return {"ok": True}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/telegram/status", dependencies=[Depends(require_admin)])
