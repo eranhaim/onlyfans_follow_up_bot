@@ -1,7 +1,9 @@
 import { FormEvent, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { api, FollowUpStep } from "./api";
 
 export default function MessagesTab() {
+  const { t } = useTranslation();
   const [steps, setSteps] = useState<FollowUpStep[]>([]);
   const [delayHours, setDelayHours] = useState("24");
   const [messageText, setMessageText] = useState("");
@@ -13,14 +15,14 @@ export default function MessagesTab() {
     try {
       setSteps(await api.listSteps());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
+      setError(err instanceof Error ? err.message : t("messages.loadFailed"));
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   async function addStep(e: FormEvent) {
@@ -35,7 +37,7 @@ export default function MessagesTab() {
       setMessageText("");
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create");
+      setError(err instanceof Error ? err.message : t("messages.createFailed"));
     }
   }
 
@@ -45,7 +47,7 @@ export default function MessagesTab() {
   }
 
   async function remove(step: FollowUpStep) {
-    if (!confirm("Delete this follow-up message?")) return;
+    if (!confirm(t("messages.deleteConfirm"))) return;
     await api.deleteStep(step.id);
     await load();
   }
@@ -62,25 +64,22 @@ export default function MessagesTab() {
   return (
     <div>
       <div className="card">
-        <h2>Follow-up sequence</h2>
-        <p className="muted">
-          Messages send in order when a customer goes quiet. Each step fires after the delay (hours)
-          from the customer&apos;s last message.
-        </p>
+        <h2>{t("messages.sequenceTitle")}</h2>
+        <p className="muted">{t("messages.sequenceHint")}</p>
         {loading ? (
-          <p className="muted">Loading…</p>
+          <p className="muted">{t("common.loading")}</p>
         ) : steps.length === 0 ? (
-          <p className="muted">No messages yet. Add your first one below.</p>
+          <p className="muted">{t("messages.noMessages")}</p>
         ) : (
           steps.map((step, index) => (
             <div className="step-item" key={step.id}>
               <div className="step-header">
                 <strong>
-                  Step {index + 1} · after {step.delay_hours}h
+                  {t("messages.step", { n: index + 1 })} · {t("messages.afterHours", { hours: step.delay_hours })}
                 </strong>
                 <div className="row">
                   <span className={`badge ${step.is_active ? "on" : "off"}`}>
-                    {step.is_active ? "Active" : "Paused"}
+                    {step.is_active ? t("messages.active") : t("messages.paused")}
                   </span>
                   <button className="btn secondary" onClick={() => move(step, -1)} disabled={index === 0}>
                     ↑
@@ -93,10 +92,10 @@ export default function MessagesTab() {
                     ↓
                   </button>
                   <button className="btn secondary" onClick={() => toggle(step)}>
-                    {step.is_active ? "Pause" : "Enable"}
+                    {step.is_active ? t("messages.pause") : t("messages.enable")}
                   </button>
                   <button className="btn danger" onClick={() => remove(step)}>
-                    Delete
+                    {t("messages.delete")}
                   </button>
                 </div>
               </div>
@@ -107,9 +106,9 @@ export default function MessagesTab() {
       </div>
 
       <form className="card" onSubmit={addStep}>
-        <h2>Add message</h2>
+        <h2>{t("messages.addTitle")}</h2>
         <div className="field">
-          <label>Send after (hours of inactivity)</label>
+          <label>{t("messages.delayLabel")}</label>
           <input
             type="number"
             min="0.1"
@@ -120,17 +119,17 @@ export default function MessagesTab() {
           />
         </div>
         <div className="field">
-          <label>Message text</label>
+          <label>{t("messages.textLabel")}</label>
           <textarea
             value={messageText}
             onChange={(e) => setMessageText(e.target.value)}
-            placeholder="Hey! Still interested?"
+            placeholder={t("messages.textPlaceholder")}
             required
           />
         </div>
         {error && <div className="error">{error}</div>}
         <button className="btn" type="submit">
-          Add to sequence
+          {t("messages.addButton")}
         </button>
       </form>
     </div>

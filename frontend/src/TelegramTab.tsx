@@ -1,7 +1,9 @@
 import { FormEvent, useEffect, useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import { api } from "./api";
 
 export default function TelegramTab() {
+  const { t } = useTranslation();
   const [connected, setConnected] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
   const [phone, setPhone] = useState("");
@@ -17,12 +19,12 @@ export default function TelegramTab() {
       setConnected(status.connected);
       setUsername(status.username || status.first_name || null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load status");
+      setError(err instanceof Error ? err.message : t("telegram.loadFailed"));
     }
   }
 
   useEffect(() => {
-    refresh();
+    void refresh();
   }, []);
 
   async function requestCode(e: FormEvent) {
@@ -32,9 +34,9 @@ export default function TelegramTab() {
     try {
       const res = await api.sendCode(phone);
       setPhoneCodeHash(res.phone_code_hash);
-      setInfo("Code sent. Check Telegram and enter it below.");
+      setInfo(t("telegram.codeSent"));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send code");
+      setError(err instanceof Error ? err.message : t("telegram.sendCodeFailed"));
     }
   }
 
@@ -43,11 +45,11 @@ export default function TelegramTab() {
     setError("");
     try {
       await api.signIn(phone, code, phoneCodeHash);
-      setInfo("Connected!");
+      setInfo(t("telegram.connected"));
       setCode("");
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign-in failed");
+      setError(err instanceof Error ? err.message : t("telegram.signInFailed"));
     }
   }
 
@@ -56,9 +58,9 @@ export default function TelegramTab() {
     setError("");
     try {
       const res = await api.runNow();
-      setInfo(`Scheduler run complete. Sent ${res.sent} message(s).`);
+      setInfo(t("telegram.runComplete", { count: res.sent }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Run failed");
+      setError(err instanceof Error ? err.message : t("telegram.runFailed"));
     } finally {
       setRunning(false);
     }
@@ -67,23 +69,29 @@ export default function TelegramTab() {
   return (
     <div>
       <div className="card">
-        <h2>Telegram account</h2>
+        <h2>{t("telegram.accountTitle")}</h2>
         {connected ? (
           <p>
-            Connected as <strong>{username ? `@${username}` : "model account"}</strong>
+            {username ? (
+              <Trans i18nKey="telegram.connectedAs" values={{ username }} components={{ strong: <strong /> }} />
+            ) : (
+              <Trans i18nKey="telegram.connectedAsFallback" components={{ strong: <strong /> }} />
+            )}
           </p>
         ) : (
           <p className="muted">
-            Connect the model&apos;s Telegram account. You need API credentials in the server{" "}
-            <code>.env</code> (<code>TELEGRAM_API_ID</code>, <code>TELEGRAM_API_HASH</code>).
+            <Trans
+              i18nKey="telegram.connectHint"
+              components={{ code: <code /> }}
+            />
           </p>
         )}
         <div className="row" style={{ marginTop: 12 }}>
-          <button className="btn secondary" onClick={refresh}>
-            Refresh status
+          <button className="btn secondary" onClick={() => void refresh()}>
+            {t("telegram.refreshStatus")}
           </button>
-          <button className="btn" onClick={runNow} disabled={running || !connected}>
-            {running ? "Running…" : "Run follow-ups now"}
+          <button className="btn" onClick={() => void runNow()} disabled={running || !connected}>
+            {running ? t("telegram.running") : t("telegram.runNow")}
           </button>
         </div>
         {info && <p className="muted" style={{ marginTop: 12 }}>{info}</p>}
@@ -92,30 +100,30 @@ export default function TelegramTab() {
 
       {!connected && (
         <div className="card">
-          <h2>Connect with phone</h2>
+          <h2>{t("telegram.phoneTitle")}</h2>
           <form onSubmit={requestCode}>
             <div className="field">
-              <label>Phone number (international format)</label>
+              <label>{t("telegram.phoneLabel")}</label>
               <input
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="+1234567890"
+                placeholder={t("telegram.phonePlaceholder")}
                 required
               />
             </div>
             <button className="btn secondary" type="submit">
-              Send login code
+              {t("telegram.sendCode")}
             </button>
           </form>
 
           {phoneCodeHash && (
             <form onSubmit={verifyCode} style={{ marginTop: 16 }}>
               <div className="field">
-                <label>Code from Telegram</label>
+                <label>{t("telegram.codeLabel")}</label>
                 <input value={code} onChange={(e) => setCode(e.target.value)} required />
               </div>
               <button className="btn" type="submit">
-                Verify & connect
+                {t("telegram.verify")}
               </button>
             </form>
           )}

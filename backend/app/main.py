@@ -33,13 +33,13 @@ def seed_defaults() -> None:
                     FollowUpStep(
                         position=0,
                         delay_hours=24,
-                        message_text="Hey! I noticed you stopped by — anything I can help you with? 😊",
+                        message_text="היי! שמתי לב שנכנסת — יש משהו שאני יכולה לעזור בו? 😊",
                         is_active=True,
                     ),
                     FollowUpStep(
                         position=1,
                         delay_hours=48,
-                        message_text="Still thinking about it? I have something special waiting for you 💕",
+                        message_text="עדיין חושב/ת על זה? יש לי משהו מיוחד שמחכה לך 💕",
                         is_active=True,
                     ),
                 ]

@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { clearToken, getToken } from "./api";
+import LanguageSwitcher from "./components/LanguageSwitcher";
 import DashboardTab from "./DashboardTab";
 import Login from "./Login";
 import MessagesTab from "./MessagesTab";
@@ -8,6 +10,7 @@ import TelegramTab from "./TelegramTab";
 type Tab = "dashboard" | "messages" | "telegram";
 
 export default function App() {
+  const { t } = useTranslation();
   const [authed, setAuthed] = useState(!!getToken());
   const [tab, setTab] = useState<Tab>("dashboard");
 
@@ -17,28 +20,31 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
-        <h1 style={{ margin: 0 }}>Follow-Up Bot</h1>
-        <button
-          className="btn secondary"
-          onClick={() => {
-            clearToken();
-            setAuthed(false);
-          }}
-        >
-          Log out
-        </button>
+      <div className="row app-header">
+        <h1 style={{ margin: 0 }}>{t("app.title")}</h1>
+        <div className="row">
+          <LanguageSwitcher />
+          <button
+            className="btn secondary"
+            onClick={() => {
+              clearToken();
+              setAuthed(false);
+            }}
+          >
+            {t("auth.logout")}
+          </button>
+        </div>
       </div>
 
       <div className="tabs">
         <button className={`tab ${tab === "dashboard" ? "active" : ""}`} onClick={() => setTab("dashboard")}>
-          Dashboard
+          {t("tabs.dashboard")}
         </button>
         <button className={`tab ${tab === "messages" ? "active" : ""}`} onClick={() => setTab("messages")}>
-          Messages
+          {t("tabs.messages")}
         </button>
         <button className={`tab ${tab === "telegram" ? "active" : ""}`} onClick={() => setTab("telegram")}>
-          Telegram
+          {t("tabs.telegram")}
         </button>
       </div>
 

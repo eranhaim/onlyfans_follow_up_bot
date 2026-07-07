@@ -1,0 +1,84 @@
+{
+  "app": {
+    "title": "בוט מעקב"
+  },
+  "common": {
+    "yes": "כן",
+    "no": "לא",
+    "loading": "טוען…",
+    "dash": "—",
+    "language": "שפה",
+    "hebrew": "עברית",
+    "english": "English"
+  },
+  "auth": {
+    "subtitle": "פאנל ניהול לשיווק מחדש בטלגרם",
+    "password": "סיסמה",
+    "signIn": "התחברות",
+    "signingIn": "מתחבר…",
+    "loginFailed": "ההתחברות נכשלה",
+    "logout": "התנתקות"
+  },
+  "tabs": {
+    "dashboard": "לוח בקרה",
+    "messages": "הודעות",
+    "telegram": "טלגרם"
+  },
+  "dashboard": {
+    "telegramConnected": "טלגרם מחובר",
+    "trackedChats": "שיחות במעקב",
+    "dueNow": "ממתינות לשליחה",
+    "sent24h": "נשלחו (24 שעות)",
+    "recentConversations": "שיחות אחרונות",
+    "user": "משתמש",
+    "lastMessage": "הודעה אחרונה",
+    "stepsSent": "שלבים שנשלחו",
+    "lastFollowUp": "מעקב אחרון",
+    "optedOut": "הוסר מרשימה",
+    "optOut": "הסר מרשימה",
+    "noConversations": "עדיין אין שיחות במעקב.",
+    "loadFailed": "טעינה נכשלה"
+  },
+  "messages": {
+    "sequenceTitle": "רצף מעקב",
+    "sequenceHint": "ההודעות נשלחות לפי סדר כשלקוח משתיק. כל שלב נשלח אחרי ההשהיה (בשעות) מההודעה האחרונה של הלקוח.",
+    "noMessages": "עדיין אין הודעות. הוסיפו את הראשונה למטה.",
+    "step": "שלב {{n}}",
+    "afterHours": "אחרי {{hours}} שעות",
+    "active": "פעיל",
+    "paused": "מושהה",
+    "pause": "השהה",
+    "enable": "הפעל",
+    "delete": "מחק",
+    "deleteConfirm": "למחוק את הודעת המעקב הזו?",
+    "addTitle": "הוספת הודעה",
+    "delayLabel": "שליחה אחרי (שעות ללא פעילות)",
+    "textLabel": "טקסט ההודעה",
+    "textPlaceholder": "היי! עדיין מעוניין/ת?",
+    "addButton": "הוסף לרצף",
+    "loadFailed": "טעינה נכשלה",
+    "createFailed": "יצירה נכשלה"
+  },
+  "telegram": {
+    "accountTitle": "חשבון טלגרם",
+    "connectedAs": "מחובר כ־<strong>@{{username}}</strong>",
+    "connectedAsFallback": "מחובר כ־<strong>חשבון המודל</strong>",
+    "connectHint": "חברו את חשבון הטלגרם של המודל. נדרשים פרטי API בקובץ <code>.env</code> בשרת (<code>TELEGRAM_API_ID</code>, <code>TELEGRAM_API_HASH</code>).",
+    "refreshStatus": "רענון סטטוס",
+    "runNow": "הרץ מעקב עכשיו",
+    "running": "מריץ…",
+    "codeSent": "קוד נשלח. בדקו בטלגרם והזינו למטה.",
+    "connected": "מחובר!",
+    "runComplete": "הרצה הושלמה. נשלחו {{count}} הודעות.",
+    "loadFailed": "טעינת סטטוס נכשלה",
+    "sendCodeFailed": "שליחת הקוד נכשלה",
+    "signInFailed": "ההתחברות נכשלה",
+    "runFailed": "ההרצה נכשלה",
+    "phoneTitle": "חיבור עם טלפון",
+    "phoneLabel": "מספר טלפון (פורמט בינלאומי)",
+    "phonePlaceholder": "+972501234567",
+    "sendCode": "שלח קוד התחברות",
+    "codeLabel": "קוד מטלגרם",
+    "verify": "אימות וחיבור"
+  }
+}

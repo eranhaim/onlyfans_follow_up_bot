@@ -1,0 +1,84 @@
+{
+  "app": {
+    "title": "Follow-Up Bot"
+  },
+  "common": {
+    "yes": "Yes",
+    "no": "No",
+    "loading": "Loading…",
+    "dash": "—",
+    "language": "Language",
+    "hebrew": "עברית",
+    "english": "English"
+  },
+  "auth": {
+    "subtitle": "Admin panel for Telegram remarketing",
+    "password": "Password",
+    "signIn": "Sign in",
+    "signingIn": "Signing in…",
+    "loginFailed": "Login failed",
+    "logout": "Log out"
+  },
+  "tabs": {
+    "dashboard": "Dashboard",
+    "messages": "Messages",
+    "telegram": "Telegram"
+  },
+  "dashboard": {
+    "telegramConnected": "Telegram connected",
+    "trackedChats": "Tracked chats",
+    "dueNow": "Due now",
+    "sent24h": "Sent (24h)",
+    "recentConversations": "Recent conversations",
+    "user": "User",
+    "lastMessage": "Last message",
+    "stepsSent": "Steps sent",
+    "lastFollowUp": "Last follow-up",
+    "optedOut": "opted out",
+    "optOut": "Opt out",
+    "noConversations": "No conversations tracked yet.",
+    "loadFailed": "Failed to load"
+  },
+  "messages": {
+    "sequenceTitle": "Follow-up sequence",
+    "sequenceHint": "Messages send in order when a customer goes quiet. Each step fires after the delay (hours) from the customer's last message.",
+    "noMessages": "No messages yet. Add your first one below.",
+    "step": "Step {{n}}",
+    "afterHours": "after {{hours}}h",
+    "active": "Active",
+    "paused": "Paused",
+    "pause": "Pause",
+    "enable": "Enable",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this follow-up message?",
+    "addTitle": "Add message",
+    "delayLabel": "Send after (hours of inactivity)",
+    "textLabel": "Message text",
+    "textPlaceholder": "Hey! Still interested?",
+    "addButton": "Add to sequence",
+    "loadFailed": "Failed to load",
+    "createFailed": "Failed to create"
+  },
+  "telegram": {
+    "accountTitle": "Telegram account",
+    "connectedAs": "Connected as <strong>@{{username}}</strong>",
+    "connectedAsFallback": "Connected as <strong>model account</strong>",
+    "connectHint": "Connect the model's Telegram account. You need API credentials in the server <code>.env</code> (<code>TELEGRAM_API_ID</code>, <code>TELEGRAM_API_HASH</code>).",
+    "refreshStatus": "Refresh status",
+    "runNow": "Run follow-ups now",
+    "running": "Running…",
+    "codeSent": "Code sent. Check Telegram and enter it below.",
+    "connected": "Connected!",
+    "runComplete": "Scheduler run complete. Sent {{count}} message(s).",
+    "loadFailed": "Failed to load status",
+    "sendCodeFailed": "Failed to send code",
+    "signInFailed": "Sign-in failed",
+    "runFailed": "Run failed",
+    "phoneTitle": "Connect with phone",
+    "phoneLabel": "Phone number (international format)",
+    "phonePlaceholder": "+1234567890",
+    "sendCode": "Send login code",
+    "codeLabel": "Code from Telegram",
+    "verify": "Verify & connect"
+  }
+}

@@ -1,15 +1,19 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { api, Conversation, DashboardStats } from "./api";
 
-function fmt(dt: string | null) {
-  if (!dt) return "—";
-  return new Date(dt).toLocaleString();
-}
-
 export default function DashboardTab() {
+  const { t, i18n } = useTranslation();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [error, setError] = useState("");
+
+  const dateLocale = i18n.language === "he" ? "he-IL" : "en-US";
+
+  function fmt(dt: string | null) {
+    if (!dt) return t("common.dash");
+    return new Date(dt).toLocaleString(dateLocale);
+  }
 
   async function load() {
     try {
@@ -17,13 +21,13 @@ export default function DashboardTab() {
       setStats(s);
       setConversations(c);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
+      setError(err instanceof Error ? err.message : t("dashboard.loadFailed"));
     }
   }
 
   useEffect(() => {
-    load();
-    const id = setInterval(load, 30000);
+    void load();
+    const id = setInterval(() => void load(), 30000);
     return () => clearInterval(id);
   }, []);
 
@@ -37,34 +41,34 @@ export default function DashboardTab() {
       {stats && (
         <div className="stats" style={{ marginBottom: 16 }}>
           <div className="stat">
-            <strong>{stats.connected ? "Yes" : "No"}</strong>
-            Telegram connected
+            <strong>{stats.connected ? t("common.yes") : t("common.no")}</strong>
+            {t("dashboard.telegramConnected")}
           </div>
           <div className="stat">
             <strong>{stats.tracked_conversations}</strong>
-            Tracked chats
+            {t("dashboard.trackedChats")}
           </div>
           <div className="stat">
             <strong>{stats.pending_follow_ups}</strong>
-            Due now
+            {t("dashboard.dueNow")}
           </div>
           <div className="stat">
             <strong>{stats.sent_last_24h}</strong>
-            Sent (24h)
+            {t("dashboard.sent24h")}
           </div>
         </div>
       )}
 
       <div className="card">
-        <h2>Recent conversations</h2>
+        <h2>{t("dashboard.recentConversations")}</h2>
         {error && <div className="error">{error}</div>}
         <table>
           <thead>
             <tr>
-              <th>User</th>
-              <th>Last message</th>
-              <th>Steps sent</th>
-              <th>Last follow-up</th>
+              <th>{t("dashboard.user")}</th>
+              <th>{t("dashboard.lastMessage")}</th>
+              <th>{t("dashboard.stepsSent")}</th>
+              <th>{t("dashboard.lastFollowUp")}</th>
               <th></th>
             </tr>
           </thead>
@@ -73,15 +77,15 @@ export default function DashboardTab() {
               <tr key={c.id}>
                 <td>
                   {c.display_name || c.telegram_user_id}
-                  {c.opted_out && <span className="badge off"> opted out</span>}
+                  {c.opted_out && <span className="badge off"> {t("dashboard.optedOut")}</span>}
                 </td>
                 <td>{fmt(c.last_user_message_at)}</td>
                 <td>{c.steps_sent}</td>
                 <td>{fmt(c.last_follow_up_at)}</td>
                 <td>
                   {!c.opted_out && (
-                    <button className="btn secondary" onClick={() => optOut(c.id)}>
-                      Opt out
+                    <button className="btn secondary" onClick={() => void optOut(c.id)}>
+                      {t("dashboard.optOut")}
                     </button>
                   )}
                 </td>
@@ -89,7 +93,7 @@ export default function DashboardTab() {
             ))}
           </tbody>
         </table>
-        {conversations.length === 0 && <p className="muted">No conversations tracked yet.</p>}
+        {conversations.length === 0 && <p className="muted">{t("dashboard.noConversations")}</p>}
       </div>
     </div>
   );

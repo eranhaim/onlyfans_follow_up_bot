@@ -4,7 +4,7 @@
 
 body {
   margin: 0;
-  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   background: #0f1117;
   color: #e8eaed;
 }
@@ -27,6 +27,40 @@ a {
   max-width: 960px;
   margin: 0 auto;
   padding: 24px 20px 48px;
+}
+
+.app-header {
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.login-top {
+  position: absolute;
+  top: 20px;
+  inset-inline-end: 20px;
+}
+
+.lang-switcher {
+  display: inline-flex;
+  gap: 4px;
+  background: #12151d;
+  border: 1px solid #2a2f3d;
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.lang-btn {
+  background: transparent;
+  border: none;
+  color: #9aa0a6;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+}
+
+.lang-btn.active {
+  background: #2a2f3d;
+  color: #e8eaed;
 }
 
 .card {
@@ -199,7 +233,11 @@ table {
 
 th,
 td {
-  text-align: left;
+  text-align: start;
   padding: 8px 6px;
   border-bottom: 1px solid #2a2f3d;
+}
+
+html[dir="rtl"] .step-header {
+  flex-direction: row-reverse;
 }
