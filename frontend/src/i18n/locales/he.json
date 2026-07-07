@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "בוט מעקב"
+    "title": "בוט follow up"
   },
   "common": {
     "yes": "כן",
@@ -26,21 +26,21 @@
   },
   "dashboard": {
     "telegramConnected": "טלגרם מחובר",
-    "trackedChats": "שיחות במעקב",
+    "trackedChats": "שיחות follow up",
     "dueNow": "ממתינות לשליחה",
     "sent24h": "נשלחו (24 שעות)",
     "recentConversations": "שיחות אחרונות",
     "user": "משתמש",
     "lastMessage": "הודעה אחרונה",
     "stepsSent": "שלבים שנשלחו",
-    "lastFollowUp": "מעקב אחרון",
+    "lastFollowUp": "follow up אחרון",
     "optedOut": "הוסר מרשימה",
     "optOut": "הסר מרשימה",
-    "noConversations": "עדיין אין שיחות במעקב.",
+    "noConversations": "עדיין אין שיחות follow up.",
     "loadFailed": "טעינה נכשלה"
   },
   "messages": {
-    "sequenceTitle": "רצף מעקב",
+    "sequenceTitle": "רצף follow up",
     "sequenceHint": "ההודעות נשלחות לפי סדר כשלקוח משתיק. כל שלב נשלח אחרי ההשהיה (בשעות) מההודעה האחרונה של הלקוח.",
     "noMessages": "עדיין אין הודעות. הוסיפו את הראשונה למטה.",
     "step": "שלב {{n}}",
@@ -50,7 +50,7 @@
     "pause": "השהה",
     "enable": "הפעל",
     "delete": "מחק",
-    "deleteConfirm": "למחוק את הודעת המעקב הזו?",
+    "deleteConfirm": "למחוק את הודעת ה-follow up הזו?",
     "addTitle": "הוספת הודעה",
     "delayLabel": "שליחה אחרי (שעות ללא פעילות)",
     "textLabel": "טקסט ההודעה",
@@ -65,7 +65,7 @@
     "connectedAsFallback": "מחובר כ־<strong>חשבון המודל</strong>",
     "connectHint": "חברו את חשבון הטלגרם של המודל. נדרשים פרטי API בקובץ <code>.env</code> בשרת (<code>TELEGRAM_API_ID</code>, <code>TELEGRAM_API_HASH</code>).",
     "refreshStatus": "רענון סטטוס",
-    "runNow": "הרץ מעקב עכשיו",
+    "runNow": "הרץ follow up עכשיו",
     "running": "מריץ…",
     "codeSent": "קוד נשלח. בדקו בטלגרם והזינו למטה.",
     "connected": "מחובר!",
