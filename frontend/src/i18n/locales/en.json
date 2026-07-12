@@ -80,6 +80,8 @@
     "sendCode": "Send login code",
     "codeLabel": "Code from Telegram",
     "verify": "Verify & connect",
+    "2faRequired": "Two-factor password required. Enter your Telegram password below.",
+    "2faLabel": "Telegram password (2FA)",
     "linkedAccounts": "Linked accounts",
     "noAccounts": "No linked accounts yet.",
     "colPhone": "Phone",

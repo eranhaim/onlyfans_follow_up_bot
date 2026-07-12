@@ -10,6 +10,8 @@ export default function TelegramTab() {
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [phoneCodeHash, setPhoneCodeHash] = useState("");
+  const [password, setPassword] = useState("");
+  const [needs2FA, setNeeds2FA] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [running, setRunning] = useState(false);
@@ -60,14 +62,22 @@ export default function TelegramTab() {
     e.preventDefault();
     setError("");
     try {
-      await api.signIn(phone, code, phoneCodeHash);
+      await api.signIn(phone, code, phoneCodeHash, needs2FA ? password : undefined);
       setInfo(t("telegram.connected"));
       setCode("");
       setPhoneCodeHash("");
       setPhone("");
+      setPassword("");
+      setNeeds2FA(false);
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("telegram.signInFailed"));
+      const msg = err instanceof Error ? err.message : t("telegram.signInFailed");
+      if (msg.toLowerCase().includes("two-factor") || msg.toLowerCase().includes("password")) {
+        setNeeds2FA(true);
+        setError(t("telegram.2faRequired"));
+      } else {
+        setError(msg);
+      }
     }
   }
 
@@ -189,6 +199,17 @@ export default function TelegramTab() {
               <label>{t("telegram.codeLabel")}</label>
               <input value={code} onChange={(e) => setCode(e.target.value)} required />
             </div>
+            {needs2FA && (
+              <div className="field">
+                <label>{t("telegram.2faLabel")}</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+            )}
             <button className="btn" type="submit">
               {t("telegram.verify")}
             </button>
