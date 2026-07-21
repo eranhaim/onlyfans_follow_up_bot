@@ -15,6 +15,18 @@ services:
       timeout: 5s
       retries: 10
 
+  mongo:
+    image: mongo:7
+    container_name: followup-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   api:
     build: ./backend
     container_name: followup-api
@@ -23,9 +35,12 @@ services:
       - .env
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://followup:followup@postgres:5432/followup}
+      MONGODB_URL: ${MONGODB_URL:-mongodb://mongo:27017/followup}
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:8087}
     depends_on:
       postgres:
+        condition: service_healthy
+      mongo:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
@@ -46,3 +61,4 @@ services:
 
 volumes:
   postgres_data:
+  mongo_data:

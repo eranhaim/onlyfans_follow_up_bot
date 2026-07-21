@@ -20,18 +20,37 @@ class TelegramAccount(Base):
     is_connected: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    conversations: Mapped[list["Conversation"]] = relationship(back_populates="account")
+    conversations: Mapped[list["Conversation"]] = relationship(back_populates="account", cascade="all, delete-orphan")
+    stages: Mapped[list["FollowUpStage"]] = relationship(back_populates="account", cascade="all, delete-orphan")
+    videos: Mapped[list["Video"]] = relationship(back_populates="account", cascade="all, delete-orphan")
 
 
-class FollowUpStep(Base):
-    __tablename__ = "follow_up_steps"
+class FollowUpStage(Base):
+    __tablename__ = "follow_up_stages"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("telegram_accounts.id"), index=True)
     position: Mapped[int] = mapped_column(Integer, index=True)
     delay_hours: Mapped[float] = mapped_column(Float)
-    message_text: Mapped[str] = mapped_column(Text)
+    system_prompt: Mapped[str] = mapped_column(Text, default="")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    account: Mapped["TelegramAccount"] = relationship(back_populates="stages")
+
+
+class Video(Base):
+    __tablename__ = "videos"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("telegram_accounts.id"), index=True)
+    s3_key: Mapped[str] = mapped_column(String(500))
+    filename: Mapped[str] = mapped_column(String(255))
+    tags: Mapped[str] = mapped_column(Text, default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    account: Mapped["TelegramAccount"] = relationship(back_populates="videos")
 
 
 class Conversation(Base):
@@ -55,7 +74,8 @@ class SentMessageLog(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     conversation_id: Mapped[int] = mapped_column(ForeignKey("conversations.id"), index=True)
-    step_id: Mapped[int | None] = mapped_column(ForeignKey("follow_up_steps.id"), nullable=True)
+    stage_id: Mapped[int | None] = mapped_column(ForeignKey("follow_up_stages.id"), nullable=True)
+    video_id: Mapped[int | None] = mapped_column(ForeignKey("videos.id"), nullable=True)
     message_text: Mapped[str] = mapped_column(Text)
     sent_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     success: Mapped[bool] = mapped_column(Boolean, default=True)

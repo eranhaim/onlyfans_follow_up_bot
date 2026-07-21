@@ -1,24 +1,27 @@
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.database import Conversation, FollowUpStep, TelegramAccount, get_db
+from app.config import settings
+from app.database import Conversation, FollowUpStage, SentMessageLog, TelegramAccount, Video, get_db
 from app.schemas import (
     ConversationOut,
     DashboardStats,
-    FollowUpStepCreate,
-    FollowUpStepOut,
-    FollowUpStepUpdate,
+    FollowUpStageCreate,
+    FollowUpStageOut,
+    FollowUpStageUpdate,
     LoginRequest,
     LoginResponse,
-    ReorderSteps,
+    ReorderStages,
     TelegramAccountOut,
     TelegramSendCode,
     TelegramSignIn,
     TelegramTestSend,
+    VideoOut,
+    VideoUpdate,
 )
-from app.config import settings
 from app.telegram_service import telegram_service
+from app.s3_service import upload_video, delete_video, s3_ready
 
 router = APIRouter(prefix="/api")
 
@@ -30,6 +33,8 @@ def require_admin(authorization: str | None = Header(default=None)) -> None:
     if token != settings.admin_password:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+
+# --- Auth ---
 
 @router.post("/auth/login", response_model=LoginResponse)
 def login(body: LoginRequest) -> LoginResponse:
@@ -43,93 +48,191 @@ def health() -> dict:
     return {"status": "ok"}
 
 
+# --- Dashboard ---
+
 @router.get("/stats", response_model=DashboardStats, dependencies=[Depends(require_admin)])
 async def stats(db: Session = Depends(get_db)) -> DashboardStats:
     status = await telegram_service.status()
-    active_steps = db.query(func.count(FollowUpStep.id)).filter(FollowUpStep.is_active.is_(True)).scalar() or 0
+    active_stages = db.query(func.count(FollowUpStage.id)).filter(FollowUpStage.is_active.is_(True)).scalar() or 0
     tracked = db.query(func.count(Conversation.id)).scalar() or 0
     return DashboardStats(
         connected=status.get("connected", False),
-        active_steps=active_steps,
+        active_stages=active_stages,
         tracked_conversations=tracked,
         pending_follow_ups=telegram_service.count_pending(),
         sent_last_24h=telegram_service.sent_last_24h(),
     )
 
 
-@router.get("/steps", response_model=list[FollowUpStepOut], dependencies=[Depends(require_admin)])
-def list_steps(db: Session = Depends(get_db)) -> list[FollowUpStep]:
-    return db.query(FollowUpStep).order_by(FollowUpStep.position).all()
+# --- Follow-Up Stages ---
+
+@router.get("/stages", response_model=list[FollowUpStageOut], dependencies=[Depends(require_admin)])
+def list_stages(account_id: int | None = None, db: Session = Depends(get_db)) -> list[FollowUpStage]:
+    q = db.query(FollowUpStage)
+    if account_id is not None:
+        q = q.filter(FollowUpStage.account_id == account_id)
+    return q.order_by(FollowUpStage.account_id, FollowUpStage.position).all()
 
 
-@router.post("/steps", response_model=FollowUpStepOut, dependencies=[Depends(require_admin)])
-def create_step(body: FollowUpStepCreate, db: Session = Depends(get_db)) -> FollowUpStep:
-    max_pos = db.query(func.max(FollowUpStep.position)).scalar()
+@router.post("/stages", response_model=FollowUpStageOut, dependencies=[Depends(require_admin)])
+def create_stage(body: FollowUpStageCreate, db: Session = Depends(get_db)) -> FollowUpStage:
+    account = db.query(TelegramAccount).filter(TelegramAccount.id == body.account_id).one_or_none()
+    if account is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    max_pos = (
+        db.query(func.max(FollowUpStage.position))
+        .filter(FollowUpStage.account_id == body.account_id)
+        .scalar()
+    )
     position = 0 if max_pos is None else max_pos + 1
-    step = FollowUpStep(
+
+    stage = FollowUpStage(
+        account_id=body.account_id,
         position=position,
         delay_hours=body.delay_hours,
-        message_text=body.message_text,
+        system_prompt=body.system_prompt,
         is_active=body.is_active,
     )
-    db.add(step)
+    db.add(stage)
     db.commit()
-    db.refresh(step)
-    return step
+    db.refresh(stage)
+    return stage
 
 
-@router.patch("/steps/{step_id}", response_model=FollowUpStepOut, dependencies=[Depends(require_admin)])
-def update_step(step_id: int, body: FollowUpStepUpdate, db: Session = Depends(get_db)) -> FollowUpStep:
-    step = db.query(FollowUpStep).filter(FollowUpStep.id == step_id).one_or_none()
-    if step is None:
-        raise HTTPException(status_code=404, detail="Step not found")
+@router.patch("/stages/{stage_id}", response_model=FollowUpStageOut, dependencies=[Depends(require_admin)])
+def update_stage(stage_id: int, body: FollowUpStageUpdate, db: Session = Depends(get_db)) -> FollowUpStage:
+    stage = db.query(FollowUpStage).filter(FollowUpStage.id == stage_id).one_or_none()
+    if stage is None:
+        raise HTTPException(status_code=404, detail="Stage not found")
     if body.delay_hours is not None:
-        step.delay_hours = body.delay_hours
-    if body.message_text is not None:
-        step.message_text = body.message_text
+        stage.delay_hours = body.delay_hours
+    if body.system_prompt is not None:
+        stage.system_prompt = body.system_prompt
     if body.is_active is not None:
-        step.is_active = body.is_active
+        stage.is_active = body.is_active
     db.commit()
-    db.refresh(step)
-    return step
+    db.refresh(stage)
+    return stage
 
 
-@router.delete("/steps/{step_id}", dependencies=[Depends(require_admin)])
-def delete_step(step_id: int, db: Session = Depends(get_db)) -> dict:
-    step = db.query(FollowUpStep).filter(FollowUpStep.id == step_id).one_or_none()
-    if step is None:
-        raise HTTPException(status_code=404, detail="Step not found")
-    db.delete(step)
+@router.delete("/stages/{stage_id}", dependencies=[Depends(require_admin)])
+def delete_stage(stage_id: int, db: Session = Depends(get_db)) -> dict:
+    stage = db.query(FollowUpStage).filter(FollowUpStage.id == stage_id).one_or_none()
+    if stage is None:
+        raise HTTPException(status_code=404, detail="Stage not found")
+    account_id = stage.account_id
+    db.delete(stage)
     db.commit()
-    _reindex_positions(db)
+    _reindex_stage_positions(db, account_id)
     return {"ok": True}
 
 
-@router.put("/steps/reorder", response_model=list[FollowUpStepOut], dependencies=[Depends(require_admin)])
-def reorder_steps(body: ReorderSteps, db: Session = Depends(get_db)) -> list[FollowUpStep]:
-    steps = {s.id: s for s in db.query(FollowUpStep).all()}
-    if set(body.step_ids) != set(steps.keys()):
-        raise HTTPException(status_code=400, detail="step_ids must include every step exactly once")
-    for position, step_id in enumerate(body.step_ids):
-        steps[step_id].position = position
+@router.put("/stages/reorder", response_model=list[FollowUpStageOut], dependencies=[Depends(require_admin)])
+def reorder_stages(body: ReorderStages, db: Session = Depends(get_db)) -> list[FollowUpStage]:
+    stages = {s.id: s for s in db.query(FollowUpStage).filter(FollowUpStage.id.in_(body.stage_ids)).all()}
+    if set(body.stage_ids) != set(stages.keys()):
+        raise HTTPException(status_code=400, detail="stage_ids must include every stage for this account")
+    for position, stage_id in enumerate(body.stage_ids):
+        stages[stage_id].position = position
     db.commit()
-    return db.query(FollowUpStep).order_by(FollowUpStep.position).all()
+    account_id = next(iter(stages.values())).account_id if stages else None
+    if account_id:
+        return (
+            db.query(FollowUpStage)
+            .filter(FollowUpStage.account_id == account_id)
+            .order_by(FollowUpStage.position)
+            .all()
+        )
+    return []
 
 
-def _reindex_positions(db: Session) -> None:
-    for position, step in enumerate(db.query(FollowUpStep).order_by(FollowUpStep.position).all()):
-        step.position = position
+def _reindex_stage_positions(db: Session, account_id: int) -> None:
+    for position, stage in enumerate(
+        db.query(FollowUpStage)
+        .filter(FollowUpStage.account_id == account_id)
+        .order_by(FollowUpStage.position)
+        .all()
+    ):
+        stage.position = position
     db.commit()
 
+
+# --- Videos ---
+
+@router.get("/videos", response_model=list[VideoOut], dependencies=[Depends(require_admin)])
+def list_videos(account_id: int | None = None, db: Session = Depends(get_db)) -> list[Video]:
+    q = db.query(Video)
+    if account_id is not None:
+        q = q.filter(Video.account_id == account_id)
+    return q.order_by(Video.created_at.desc()).all()
+
+
+@router.post("/videos", response_model=VideoOut, dependencies=[Depends(require_admin)])
+async def upload_video_endpoint(
+    account_id: int = Form(...),
+    tags: str = Form(""),
+    description: str = Form(""),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> Video:
+    if not s3_ready():
+        raise HTTPException(status_code=400, detail="S3 not configured (missing AWS credentials)")
+
+    account = db.query(TelegramAccount).filter(TelegramAccount.id == account_id).one_or_none()
+    if account is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    file_bytes = await file.read()
+    filename = file.filename or "video.mp4"
+    s3_key = upload_video(account_id, filename, file_bytes)
+
+    video = Video(
+        account_id=account_id,
+        s3_key=s3_key,
+        filename=filename,
+        tags=tags,
+        description=description,
+    )
+    db.add(video)
+    db.commit()
+    db.refresh(video)
+    return video
+
+
+@router.patch("/videos/{video_id}", response_model=VideoOut, dependencies=[Depends(require_admin)])
+def update_video(video_id: int, body: VideoUpdate, db: Session = Depends(get_db)) -> Video:
+    video = db.query(Video).filter(Video.id == video_id).one_or_none()
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    if body.tags is not None:
+        video.tags = body.tags
+    if body.description is not None:
+        video.description = body.description
+    db.commit()
+    db.refresh(video)
+    return video
+
+
+@router.delete("/videos/{video_id}", dependencies=[Depends(require_admin)])
+def delete_video_endpoint(video_id: int, db: Session = Depends(get_db)) -> dict:
+    video = db.query(Video).filter(Video.id == video_id).one_or_none()
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    delete_video(video.s3_key)
+    db.delete(video)
+    db.commit()
+    return {"ok": True}
+
+
+# --- Conversations ---
 
 @router.get("/conversations", response_model=list[ConversationOut], dependencies=[Depends(require_admin)])
-def list_conversations(db: Session = Depends(get_db)) -> list[Conversation]:
-    return (
-        db.query(Conversation)
-        .order_by(Conversation.last_user_message_at.desc().nullslast())
-        .limit(200)
-        .all()
-    )
+def list_conversations(account_id: int | None = None, db: Session = Depends(get_db)) -> list[Conversation]:
+    q = db.query(Conversation)
+    if account_id is not None:
+        q = q.filter(Conversation.account_id == account_id)
+    return q.order_by(Conversation.last_user_message_at.desc().nullslast()).limit(200).all()
 
 
 @router.post("/conversations/{conversation_id}/opt-out", dependencies=[Depends(require_admin)])
@@ -141,6 +244,8 @@ def opt_out_conversation(conversation_id: int, db: Session = Depends(get_db)) ->
     db.commit()
     return {"ok": True}
 
+
+# --- Telegram Accounts ---
 
 @router.get("/telegram/accounts", response_model=list[TelegramAccountOut], dependencies=[Depends(require_admin)])
 def list_telegram_accounts(db: Session = Depends(get_db)) -> list[TelegramAccount]:

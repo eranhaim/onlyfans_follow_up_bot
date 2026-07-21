@@ -5,7 +5,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.database import FollowUpStep, SessionLocal, TelegramAccount, init_db
+from app.database import SessionLocal, TelegramAccount, init_db
+from app.mongo import init_mongo
 from app.routes import router
 from app.scheduler import start_scheduler, stop_scheduler
 from app.telegram_service import telegram_service
@@ -26,25 +27,6 @@ def seed_defaults() -> None:
                 )
             )
             db.commit()
-
-        if db.query(FollowUpStep).count() == 0:
-            db.add_all(
-                [
-                    FollowUpStep(
-                        position=0,
-                        delay_hours=24,
-                        message_text="היי! שמתי לב שנכנסת — יש משהו שאני יכולה לעזור בו? 😊",
-                        is_active=True,
-                    ),
-                    FollowUpStep(
-                        position=1,
-                        delay_hours=48,
-                        message_text="עדיין חושב/ת על זה? יש לי משהו מיוחד שמחכה לך 💕",
-                        is_active=True,
-                    ),
-                ]
-            )
-            db.commit()
     finally:
         db.close()
 
@@ -52,9 +34,10 @@ def seed_defaults() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    init_mongo()
     seed_defaults()
     start_scheduler()
-    await telegram_service.get_client()
+    await telegram_service.connect_all()
     logger.info("Follow-up bot started")
     yield
     stop_scheduler()

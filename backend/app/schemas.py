@@ -3,31 +3,55 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
-class FollowUpStepCreate(BaseModel):
-    delay_hours: float = Field(gt=0, description="Hours after customer's last message")
-    message_text: str = Field(min_length=1, max_length=4000)
+# --- Follow-Up Stages (per account) ---
+
+class FollowUpStageCreate(BaseModel):
+    account_id: int
+    delay_hours: float = Field(gt=0)
+    system_prompt: str = ""
     is_active: bool = True
 
 
-class FollowUpStepUpdate(BaseModel):
+class FollowUpStageUpdate(BaseModel):
     delay_hours: float | None = Field(default=None, gt=0)
-    message_text: str | None = Field(default=None, min_length=1, max_length=4000)
+    system_prompt: str | None = None
     is_active: bool | None = None
 
 
-class FollowUpStepOut(BaseModel):
+class FollowUpStageOut(BaseModel):
     id: int
+    account_id: int
     position: int
     delay_hours: float
-    message_text: str
+    system_prompt: str
     is_active: bool
 
     model_config = {"from_attributes": True}
 
 
-class ReorderSteps(BaseModel):
-    step_ids: list[int]
+class ReorderStages(BaseModel):
+    stage_ids: list[int]
 
+
+# --- Videos ---
+
+class VideoOut(BaseModel):
+    id: int
+    account_id: int
+    filename: str
+    tags: str
+    description: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class VideoUpdate(BaseModel):
+    tags: str | None = None
+    description: str | None = None
+
+
+# --- Telegram ---
 
 class TelegramAccountOut(BaseModel):
     id: int
@@ -54,8 +78,11 @@ class TelegramTestSend(BaseModel):
     message: str = " test"
 
 
+# --- Conversations ---
+
 class ConversationOut(BaseModel):
     id: int
+    account_id: int
     telegram_user_id: int
     display_name: str | None
     last_user_message_at: datetime | None
@@ -66,13 +93,17 @@ class ConversationOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# --- Dashboard ---
+
 class DashboardStats(BaseModel):
     connected: bool
-    active_steps: int
+    active_stages: int
     tracked_conversations: int
     pending_follow_ups: int
     sent_last_24h: int
 
+
+# --- Auth ---
 
 class LoginRequest(BaseModel):
     password: str

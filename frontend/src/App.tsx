@@ -4,10 +4,11 @@ import { clearToken, getToken } from "./api";
 import LanguageSwitcher from "./components/LanguageSwitcher";
 import DashboardTab from "./DashboardTab";
 import Login from "./Login";
-import MessagesTab from "./MessagesTab";
+import StagesTab from "./StagesTab";
 import TelegramTab from "./TelegramTab";
+import VideosTab from "./VideosTab";
 
-type Tab = "dashboard" | "messages" | "telegram";
+type Tab = "dashboard" | "stages" | "videos" | "telegram";
 
 export default function App() {
   const { t } = useTranslation();
@@ -40,8 +41,11 @@ export default function App() {
         <button className={`tab ${tab === "dashboard" ? "active" : ""}`} onClick={() => setTab("dashboard")}>
           {t("tabs.dashboard")}
         </button>
-        <button className={`tab ${tab === "messages" ? "active" : ""}`} onClick={() => setTab("messages")}>
-          {t("tabs.messages")}
+        <button className={`tab ${tab === "stages" ? "active" : ""}`} onClick={() => setTab("stages")}>
+          {t("tabs.stages")}
+        </button>
+        <button className={`tab ${tab === "videos" ? "active" : ""}`} onClick={() => setTab("videos")}>
+          {t("tabs.videos")}
         </button>
         <button className={`tab ${tab === "telegram" ? "active" : ""}`} onClick={() => setTab("telegram")}>
           {t("tabs.telegram")}
@@ -49,7 +53,8 @@ export default function App() {
       </div>
 
       {tab === "dashboard" && <DashboardTab />}
-      {tab === "messages" && <MessagesTab />}
+      {tab === "stages" && <StagesTab />}
+      {tab === "videos" && <VideosTab />}
       {tab === "telegram" && <TelegramTab />}
     </div>
   );

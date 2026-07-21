@@ -15,7 +15,9 @@ export function clearToken() {
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers = new Headers(options.headers);
-  headers.set("Content-Type", "application/json");
+  if (!options.body || !(options.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const res = await fetch(path, { ...options, headers });
@@ -32,17 +34,29 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return res.json();
 }
 
-export type FollowUpStep = {
+// --- Types ---
+
+export type FollowUpStage = {
   id: number;
+  account_id: number;
   position: number;
   delay_hours: number;
-  message_text: string;
+  system_prompt: string;
   is_active: boolean;
+};
+
+export type Video = {
+  id: number;
+  account_id: number;
+  filename: string;
+  tags: string;
+  description: string;
+  created_at: string;
 };
 
 export type DashboardStats = {
   connected: boolean;
-  active_steps: number;
+  active_stages: number;
   tracked_conversations: number;
   pending_follow_ups: number;
   sent_last_24h: number;
@@ -50,6 +64,7 @@ export type DashboardStats = {
 
 export type Conversation = {
   id: number;
+  account_id: number;
   telegram_user_id: number;
   display_name: string | null;
   last_user_message_at: string | null;
@@ -66,6 +81,8 @@ export type TelegramAccount = {
   created_at: string;
 };
 
+// --- API ---
+
 export const api = {
   login: (password: string) =>
     request<{ token: string }>("/api/auth/login", {
@@ -75,27 +92,56 @@ export const api = {
 
   stats: () => request<DashboardStats>("/api/stats"),
 
-  listSteps: () => request<FollowUpStep[]>("/api/steps"),
+  // Stages
+  listStages: (accountId?: number) =>
+    request<FollowUpStage[]>(
+      accountId != null ? `/api/stages?account_id=${accountId}` : "/api/stages"
+    ),
 
-  createStep: (data: { delay_hours: number; message_text: string; is_active: boolean }) =>
-    request<FollowUpStep>("/api/steps", { method: "POST", body: JSON.stringify(data) }),
+  createStage: (data: { account_id: number; delay_hours: number; system_prompt: string; is_active: boolean }) =>
+    request<FollowUpStage>("/api/stages", { method: "POST", body: JSON.stringify(data) }),
 
-  updateStep: (id: number, data: Partial<FollowUpStep>) =>
-    request<FollowUpStep>(`/api/steps/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  updateStage: (id: number, data: Partial<FollowUpStage>) =>
+    request<FollowUpStage>(`/api/stages/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
 
-  deleteStep: (id: number) => request<{ ok: boolean }>(`/api/steps/${id}`, { method: "DELETE" }),
+  deleteStage: (id: number) => request<{ ok: boolean }>(`/api/stages/${id}`, { method: "DELETE" }),
 
-  reorderSteps: (step_ids: number[]) =>
-    request<FollowUpStep[]>("/api/steps/reorder", {
+  reorderStages: (stage_ids: number[]) =>
+    request<FollowUpStage[]>("/api/stages/reorder", {
       method: "PUT",
-      body: JSON.stringify({ step_ids }),
+      body: JSON.stringify({ stage_ids }),
     }),
 
-  listConversations: () => request<Conversation[]>("/api/conversations"),
+  // Videos
+  listVideos: (accountId?: number) =>
+    request<Video[]>(
+      accountId != null ? `/api/videos?account_id=${accountId}` : "/api/videos"
+    ),
+
+  uploadVideo: (accountId: number, file: File, tags: string, description: string) => {
+    const formData = new FormData();
+    formData.append("account_id", String(accountId));
+    formData.append("tags", tags);
+    formData.append("description", description);
+    formData.append("file", file);
+    return request<Video>("/api/videos", { method: "POST", body: formData });
+  },
+
+  updateVideo: (id: number, data: { tags?: string; description?: string }) =>
+    request<Video>(`/api/videos/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+
+  deleteVideo: (id: number) => request<{ ok: boolean }>(`/api/videos/${id}`, { method: "DELETE" }),
+
+  // Conversations
+  listConversations: (accountId?: number) =>
+    request<Conversation[]>(
+      accountId != null ? `/api/conversations?account_id=${accountId}` : "/api/conversations"
+    ),
 
   optOut: (id: number) =>
     request<{ ok: boolean }>(`/api/conversations/${id}/opt-out`, { method: "POST" }),
 
+  // Telegram
   telegramStatus: () =>
     request<{ connected: boolean; username?: string; first_name?: string }>("/api/telegram/status"),
 

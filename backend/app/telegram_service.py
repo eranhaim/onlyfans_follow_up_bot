@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from datetime import datetime, timedelta
 
 from sqlalchemy import func
@@ -8,47 +9,47 @@ from telethon.errors import SessionPasswordNeededError
 from telethon.sessions import StringSession
 
 from app.config import settings
-from app.database import Conversation, FollowUpStep, SentMessageLog, SessionLocal, TelegramAccount
+from app.database import (
+    Conversation,
+    FollowUpStage,
+    SentMessageLog,
+    SessionLocal,
+    TelegramAccount,
+    Video,
+)
+from app.mongo import store_message, get_chat_history, delete_chat_history
+from app.llm_service import generate_follow_up, llm_ready
+from app.s3_service import download_video, s3_ready
 
 logger = logging.getLogger(__name__)
 
 
 class TelegramService:
     def __init__(self) -> None:
-        self._client: TelegramClient | None = None
+        self._clients: dict[int, TelegramClient] = {}
         self._lock = asyncio.Lock()
         self._pending_logins: dict[str, dict] = {}
 
     def _api_ready(self) -> bool:
         return bool(settings.telegram_api_id and settings.telegram_api_hash)
 
-    def _get_session_string(self, db) -> str | None:
-        account = db.query(TelegramAccount).order_by(TelegramAccount.id).first()
-        if account and account.session_string:
-            return account.session_string
-        return settings.telegram_session_string
-
-    async def get_client(self) -> TelegramClient | None:
+    async def get_client_for_account(self, account: TelegramAccount) -> TelegramClient | None:
         if not self._api_ready():
             return None
-        if self._client and self._client.is_connected():
-            return self._client
+        if not account.session_string:
+            return None
+
+        if account.id in self._clients:
+            client = self._clients[account.id]
+            if client.is_connected():
+                return client
 
         async with self._lock:
-            if self._client and self._client.is_connected():
-                return self._client
-
-            db = SessionLocal()
-            try:
-                session_string = self._get_session_string(db)
-            finally:
-                db.close()
-
-            if not session_string:
-                return None
+            if account.id in self._clients and self._clients[account.id].is_connected():
+                return self._clients[account.id]
 
             client = TelegramClient(
-                StringSession(session_string),
+                StringSession(account.session_string),
                 settings.telegram_api_id,
                 settings.telegram_api_hash,
             )
@@ -57,11 +58,30 @@ class TelegramService:
                 await client.disconnect()
                 return None
 
-            self._client = client
-            self._register_handlers(client)
+            self._clients[account.id] = client
+            self._register_handlers(client, account.id)
             return client
 
-    def _register_handlers(self, client: TelegramClient) -> None:
+    async def connect_all(self) -> None:
+        """Connect all stored accounts on startup."""
+        if not self._api_ready():
+            return
+        db = SessionLocal()
+        try:
+            accounts = db.query(TelegramAccount).filter(
+                TelegramAccount.session_string.isnot(None),
+                TelegramAccount.is_connected.is_(True),
+            ).all()
+            for account in accounts:
+                try:
+                    await self.get_client_for_account(account)
+                    logger.info("Connected account %s (%s)", account.id, account.name)
+                except Exception:
+                    logger.exception("Failed to connect account %s", account.id)
+        finally:
+            db.close()
+
+    def _register_handlers(self, client: TelegramClient, account_id: int) -> None:
         @client.on(events.NewMessage(incoming=True))
         async def on_incoming(event: events.NewMessage.Event) -> None:
             if not event.is_private:
@@ -78,23 +98,22 @@ class TelegramService:
                 part for part in [getattr(sender, "first_name", None), getattr(sender, "last_name", None)] if part
             ) or getattr(sender, "username", None)
 
+            text = (event.message.message or "").strip()
+
+            # Store in MongoDB
+            store_message(account_id, user_id, "user", text)
+
             db = SessionLocal()
             try:
-                account = db.query(TelegramAccount).order_by(TelegramAccount.id).first()
-                if account is None:
-                    account = TelegramAccount(name="Model", is_connected=True)
-                    db.add(account)
-                    db.flush()
-
                 conversation = (
                     db.query(Conversation)
-                    .filter_by(account_id=account.id, telegram_user_id=user_id)
+                    .filter_by(account_id=account_id, telegram_user_id=user_id)
                     .one_or_none()
                 )
                 now = datetime.utcnow()
                 if conversation is None:
                     conversation = Conversation(
-                        account_id=account.id,
+                        account_id=account_id,
                         telegram_user_id=user_id,
                         display_name=display_name,
                         last_user_message_at=now,
@@ -107,8 +126,7 @@ class TelegramService:
                     conversation.steps_sent = 0
                     conversation.last_follow_up_at = None
 
-                text = (event.message.message or "").strip().lower()
-                if text in {"stop", "unsubscribe", "/stop"}:
+                if text.lower() in {"stop", "unsubscribe", "/stop"}:
                     conversation.opted_out = True
 
                 db.commit()
@@ -116,9 +134,20 @@ class TelegramService:
                 db.close()
 
     async def disconnect(self) -> None:
-        if self._client:
-            await self._client.disconnect()
-            self._client = None
+        for account_id, client in list(self._clients.items()):
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
+        self._clients.clear()
+
+    async def disconnect_account(self, account_id: int) -> None:
+        client = self._clients.pop(account_id, None)
+        if client:
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
 
     async def send_code(self, phone: str) -> str:
         if not self._api_ready():
@@ -161,26 +190,57 @@ class TelegramService:
             account.session_string = session_string
             account.is_connected = True
             db.commit()
+            db.refresh(account)
+            account_id = account.id
         finally:
             db.close()
 
-        self._client = None
+        # Reconnect this account
+        db = SessionLocal()
+        try:
+            account = db.query(TelegramAccount).get(account_id)
+            if account:
+                await self.get_client_for_account(account)
+        finally:
+            db.close()
+
         return session_string
 
     async def status(self) -> dict:
-        client = await self.get_client()
-        if client is None:
-            return {"connected": False}
-        me = await client.get_me()
-        return {
-            "connected": True,
-            "user_id": me.id,
-            "username": me.username,
-            "first_name": me.first_name,
-        }
+        db = SessionLocal()
+        try:
+            account = db.query(TelegramAccount).filter(
+                TelegramAccount.is_connected.is_(True)
+            ).order_by(TelegramAccount.id).first()
+            if account is None:
+                return {"connected": False}
+
+            client = await self.get_client_for_account(account)
+            if client is None:
+                return {"connected": False}
+
+            me = await client.get_me()
+            return {
+                "connected": True,
+                "user_id": me.id,
+                "username": me.username,
+                "first_name": me.first_name,
+            }
+        finally:
+            db.close()
 
     async def send_test_to_first_chat(self, message: str = " test") -> dict:
-        client = await self.get_client()
+        db = SessionLocal()
+        try:
+            account = db.query(TelegramAccount).filter(
+                TelegramAccount.is_connected.is_(True)
+            ).order_by(TelegramAccount.id).first()
+            if account is None:
+                raise ValueError("No connected Telegram account")
+            client = await self.get_client_for_account(account)
+        finally:
+            db.close()
+
         if client is None:
             raise ValueError("Telegram not connected")
 
@@ -199,6 +259,8 @@ class TelegramService:
         raise ValueError("No chats found on this account")
 
     async def remove_account(self, account_id: int) -> None:
+        await self.disconnect_account(account_id)
+
         db = SessionLocal()
         try:
             account = db.query(TelegramAccount).filter(TelegramAccount.id == account_id).one_or_none()
@@ -217,81 +279,149 @@ class TelegramService:
                     synchronize_session=False
                 )
 
+            db.query(FollowUpStage).filter(FollowUpStage.account_id == account_id).delete(
+                synchronize_session=False
+            )
+            db.query(Video).filter(Video.account_id == account_id).delete(
+                synchronize_session=False
+            )
             db.delete(account)
             db.commit()
         finally:
             db.close()
 
-        await self.disconnect()
+        delete_chat_history(account_id)
 
     async def run_follow_ups(self) -> int:
-        client = await self.get_client()
-        if client is None:
+        if not self._api_ready():
             return 0
 
         db = SessionLocal()
         sent_count = 0
         try:
-            steps = (
-                db.query(FollowUpStep)
-                .filter(FollowUpStep.is_active.is_(True))
-                .order_by(FollowUpStep.position)
-                .all()
-            )
-            if not steps:
-                return 0
-
-            account = db.query(TelegramAccount).order_by(TelegramAccount.id).first()
-            if account is None:
-                return 0
+            accounts = db.query(TelegramAccount).filter(
+                TelegramAccount.is_connected.is_(True),
+                TelegramAccount.session_string.isnot(None),
+            ).all()
 
             now = datetime.utcnow()
-            conversations = (
-                db.query(Conversation)
-                .filter(
-                    Conversation.account_id == account.id,
-                    Conversation.opted_out.is_(False),
-                    Conversation.last_user_message_at.isnot(None),
-                )
-                .all()
-            )
 
-            for conversation in conversations:
-                if conversation.steps_sent >= len(steps):
+            for account in accounts:
+                client = await self.get_client_for_account(account)
+                if client is None:
                     continue
 
-                step = steps[conversation.steps_sent]
-                if conversation.last_user_message_at is None:
-                    continue
-
-                due_at = conversation.last_user_message_at + timedelta(hours=step.delay_hours)
-                if now < due_at:
-                    continue
-
-                try:
-                    await client.send_message(conversation.telegram_user_id, step.message_text)
-                    conversation.steps_sent += 1
-                    conversation.last_follow_up_at = now
-                    db.add(
-                        SentMessageLog(
-                            conversation_id=conversation.id,
-                            step_id=step.id,
-                            message_text=step.message_text,
-                            success=True,
-                        )
+                stages = (
+                    db.query(FollowUpStage)
+                    .filter(
+                        FollowUpStage.account_id == account.id,
+                        FollowUpStage.is_active.is_(True),
                     )
-                    sent_count += 1
-                except Exception as exc:
-                    logger.exception("Failed to send follow-up to %s", conversation.telegram_user_id)
-                    db.add(
-                        SentMessageLog(
+                    .order_by(FollowUpStage.position)
+                    .all()
+                )
+                if not stages:
+                    continue
+
+                conversations = (
+                    db.query(Conversation)
+                    .filter(
+                        Conversation.account_id == account.id,
+                        Conversation.opted_out.is_(False),
+                        Conversation.last_user_message_at.isnot(None),
+                    )
+                    .all()
+                )
+
+                videos = db.query(Video).filter(Video.account_id == account.id).all()
+                video_list = [
+                    {"id": v.id, "tags": v.tags, "description": v.description, "filename": v.filename}
+                    for v in videos
+                ] if videos else None
+
+                for conversation in conversations:
+                    if conversation.steps_sent >= len(stages):
+                        continue
+
+                    stage = stages[conversation.steps_sent]
+
+                    # Timing: step 0 from last_user_message, step 1+ from last_follow_up
+                    if conversation.steps_sent == 0:
+                        reference_time = conversation.last_user_message_at
+                    else:
+                        reference_time = conversation.last_follow_up_at or conversation.last_user_message_at
+
+                    if reference_time is None:
+                        continue
+
+                    due_at = reference_time + timedelta(hours=stage.delay_hours)
+                    if now < due_at:
+                        continue
+
+                    # Generate message with LLM or fallback
+                    message_text = None
+                    video_id = None
+
+                    if llm_ready() and stage.system_prompt.strip():
+                        try:
+                            history = get_chat_history(account.id, conversation.telegram_user_id)
+                            result = generate_follow_up(
+                                system_prompt=stage.system_prompt,
+                                chat_history=history,
+                                available_videos=video_list,
+                            )
+                            message_text = result["message"]
+                            video_id = result.get("video_id")
+                        except Exception:
+                            logger.exception(
+                                "LLM generation failed for conversation %s, stage %s",
+                                conversation.id, stage.id,
+                            )
+
+                    if not message_text:
+                        message_text = f"Hey! 💕"
+
+                    # Send message
+                    try:
+                        await client.send_message(conversation.telegram_user_id, message_text)
+
+                        # Send video if selected
+                        if video_id and s3_ready():
+                            video_obj = db.query(Video).filter(Video.id == video_id).one_or_none()
+                            if video_obj:
+                                try:
+                                    tmp_path = download_video(video_obj.s3_key)
+                                    await client.send_file(
+                                        conversation.telegram_user_id,
+                                        tmp_path,
+                                        caption="",
+                                    )
+                                    os.unlink(tmp_path)
+                                except Exception:
+                                    logger.exception("Failed to send video %s", video_id)
+
+                        # Store assistant message in MongoDB
+                        store_message(account.id, conversation.telegram_user_id, "assistant", message_text)
+
+                        conversation.steps_sent += 1
+                        conversation.last_follow_up_at = now
+                        db.add(SentMessageLog(
                             conversation_id=conversation.id,
-                            step_id=step.id,
-                            message_text=step.message_text,
+                            stage_id=stage.id,
+                            video_id=video_id,
+                            message_text=message_text,
+                            success=True,
+                        ))
+                        sent_count += 1
+                    except Exception as exc:
+                        logger.exception("Failed to send follow-up to %s", conversation.telegram_user_id)
+                        db.add(SentMessageLog(
+                            conversation_id=conversation.id,
+                            stage_id=stage.id,
+                            message_text=message_text,
                             success=False,
                             error=str(exc),
-                        )
-                    )
+                        ))
 
             db.commit()
         finally:
@@ -302,25 +432,50 @@ class TelegramService:
     def count_pending(self) -> int:
         db = SessionLocal()
         try:
-            steps = (
-                db.query(FollowUpStep)
-                .filter(FollowUpStep.is_active.is_(True))
-                .order_by(FollowUpStep.position)
-                .all()
-            )
-            if not steps:
-                return 0
-
             now = datetime.utcnow()
             pending = 0
-            conversations = db.query(Conversation).filter(Conversation.opted_out.is_(False)).all()
-            for conversation in conversations:
-                if conversation.steps_sent >= len(steps) or conversation.last_user_message_at is None:
+
+            accounts = db.query(TelegramAccount).filter(
+                TelegramAccount.is_connected.is_(True),
+            ).all()
+
+            for account in accounts:
+                stages = (
+                    db.query(FollowUpStage)
+                    .filter(
+                        FollowUpStage.account_id == account.id,
+                        FollowUpStage.is_active.is_(True),
+                    )
+                    .order_by(FollowUpStage.position)
+                    .all()
+                )
+                if not stages:
                     continue
-                step = steps[conversation.steps_sent]
-                due_at = conversation.last_user_message_at + timedelta(hours=step.delay_hours)
-                if now >= due_at:
-                    pending += 1
+
+                conversations = (
+                    db.query(Conversation)
+                    .filter(
+                        Conversation.account_id == account.id,
+                        Conversation.opted_out.is_(False),
+                        Conversation.last_user_message_at.isnot(None),
+                    )
+                    .all()
+                )
+
+                for conversation in conversations:
+                    if conversation.steps_sent >= len(stages):
+                        continue
+                    stage = stages[conversation.steps_sent]
+                    if conversation.steps_sent == 0:
+                        ref = conversation.last_user_message_at
+                    else:
+                        ref = conversation.last_follow_up_at or conversation.last_user_message_at
+                    if ref is None:
+                        continue
+                    due_at = ref + timedelta(hours=stage.delay_hours)
+                    if now >= due_at:
+                        pending += 1
+
             return pending
         finally:
             db.close()

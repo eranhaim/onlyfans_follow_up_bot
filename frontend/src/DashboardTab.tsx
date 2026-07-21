@@ -45,6 +45,10 @@ export default function DashboardTab() {
             {t("dashboard.telegramConnected")}
           </div>
           <div className="stat">
+            <strong>{stats.active_stages}</strong>
+            {t("dashboard.activeStages")}
+          </div>
+          <div className="stat">
             <strong>{stats.tracked_conversations}</strong>
             {t("dashboard.trackedChats")}
           </div>
