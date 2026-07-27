@@ -164,3 +164,56 @@ export const api = {
 
   runNow: () => request<{ sent: number }>("/api/telegram/run-now", { method: "POST" }),
 };
+
+// --- Simulator Types ---
+
+export type SimMessage = {
+  role: "user" | "bot";
+  content: string;
+  stage_position: number | null;
+  video_id: number | null;
+  video_filename: string | null;
+  sim_time: string;
+};
+
+export type SimState = {
+  session_id: string;
+  account_id: number;
+  stages: FollowUpStage[];
+  videos: Video[];
+  messages: SimMessage[];
+  steps_sent: number;
+  sim_now: string;
+  last_user_message_at: string | null;
+  last_follow_up_at: string | null;
+  next_stage_index: number | null;
+  next_follow_up_due_at: string | null;
+  hours_until_next: number | null;
+  sequence_complete: boolean;
+};
+
+export const simulator = {
+  start: (account_id: number) =>
+    request<SimState>("/api/simulator/start", {
+      method: "POST",
+      body: JSON.stringify({ account_id }),
+    }),
+
+  getSession: (session_id: string) =>
+    request<SimState>(`/api/simulator/${session_id}`),
+
+  sendMessage: (session_id: string, content: string) =>
+    request<SimState>(`/api/simulator/${session_id}/message`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    }),
+
+  advance: (session_id: string, hours: number) =>
+    request<SimState>(`/api/simulator/${session_id}/advance`, {
+      method: "POST",
+      body: JSON.stringify({ hours }),
+    }),
+
+  deleteSession: (session_id: string) =>
+    request<{ ok: boolean }>(`/api/simulator/${session_id}`, { method: "DELETE" }),
+};

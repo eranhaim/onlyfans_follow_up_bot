@@ -24,7 +24,8 @@
     "dashboard": "Dashboard",
     "stages": "Follow-Up Stages",
     "videos": "Video Bank",
-    "telegram": "Telegram"
+    "telegram": "Telegram",
+    "simulator": "Simulator"
   },
   "dashboard": {
     "telegramConnected": "Telegram connected",
@@ -91,6 +92,19 @@
     "uploaded": "Video uploaded successfully!",
     "uploadFailed": "Upload failed",
     "loadFailed": "Failed to load"
+  },
+  "simulator": {
+    "title": "Follow-Up Simulator",
+    "start": "Start simulation",
+    "reset": "Reset",
+    "stageOf": "Stage {{current}}/{{total}}",
+    "nextIn": "Next follow-up in {{hours}}h",
+    "complete": "All stages complete",
+    "sendFirstMessage": "Send a message to begin",
+    "noMessages": "No messages yet — type something below as the fan",
+    "inputPlaceholder": "Type a message as the fan…",
+    "send": "Send",
+    "fastForward": "Fast-forward"
   },
   "telegram": {
     "accountTitle": "Telegram account",

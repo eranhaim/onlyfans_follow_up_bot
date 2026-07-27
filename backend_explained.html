@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>הבאקאנד מוסבר למפגר</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #0f0f1a;
+    color: #e0e0e0;
+    padding: 30px;
+    line-height: 1.7;
+  }
+  h1 { font-size: 2.2rem; color: #a78bfa; margin-bottom: 8px; }
+  h2 { font-size: 1.4rem; color: #7dd3fc; margin: 24px 0 10px; }
+  h3 { font-size: 1.1rem; color: #f0abfc; margin-bottom: 6px; }
+  .subtitle { color: #888; margin-bottom: 40px; font-size: 1rem; }
+
+  .section {
+    background: #1a1a2e;
+    border: 1px solid #2d2d4e;
+    border-radius: 14px;
+    padding: 24px;
+    margin-bottom: 28px;
+  }
+  .file-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .emoji { font-size: 2rem; }
+  .filename {
+    font-family: monospace;
+    background: #0f0f1a;
+    color: #86efac;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 0.95rem;
+  }
+  .desc { color: #cbd5e1; margin-bottom: 12px; }
+  .pill-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .pill {
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 0.82rem;
+    font-weight: 600;
+  }
+  .pill.green { background: #14532d; color: #86efac; }
+  .pill.blue { background: #1e3a5f; color: #7dd3fc; }
+  .pill.purple { background: #3b0764; color: #d8b4fe; }
+  .pill.orange { background: #431407; color: #fdba74; }
+  .pill.red { background: #4c0519; color: #fca5a5; }
+
+  /* Flow diagram */
+  .flow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    margin: 30px 0;
+  }
+  .flow-box {
+    background: #1e1e3a;
+    border: 2px solid #4f46e5;
+    border-radius: 12px;
+    padding: 14px 28px;
+    text-align: center;
+    width: 340px;
+    position: relative;
+  }
+  .flow-box .icon { font-size: 1.6rem; }
+  .flow-box .label { font-size: 0.95rem; color: #c4b5fd; margin-top: 4px; }
+  .flow-box .sub { font-size: 0.78rem; color: #666; margin-top: 2px; }
+  .flow-arrow {
+    font-size: 1.8rem;
+    color: #4f46e5;
+    line-height: 1;
+    margin: 2px 0;
+  }
+  .flow-box.highlight { border-color: #f59e0b; background: #1c1700; }
+  .flow-box.highlight .label { color: #fcd34d; }
+  .flow-box.green-box { border-color: #22c55e; background: #052e16; }
+  .flow-box.green-box .label { color: #86efac; }
+  .flow-box.red-box { border-color: #ef4444; background: #1c0505; }
+  .flow-box.red-box .label { color: #fca5a5; }
+
+  /* Grid for files */
+  .files-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 20px;
+  }
+  @media (max-width: 700px) { .files-grid { grid-template-columns: 1fr; } }
+
+  .file-card {
+    background: #111128;
+    border: 1px solid #2a2a4a;
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .file-card .fn {
+    font-family: monospace;
+    color: #86efac;
+    font-size: 0.9rem;
+    margin-bottom: 6px;
+  }
+  .file-card .desc { font-size: 0.88rem; color: #94a3b8; }
+  .file-card .role { font-size: 0.8rem; color: #64748b; margin-top: 6px; }
+
+  /* Horizontal flow */
+  .hflow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 20px 0;
+  }
+  .hbox {
+    background: #1e1e3a;
+    border: 2px solid #4f46e5;
+    border-radius: 10px;
+    padding: 10px 18px;
+    text-align: center;
+    font-size: 0.88rem;
+    color: #c4b5fd;
+  }
+  .hbox .icon { font-size: 1.3rem; display: block; }
+  .harrow { color: #4f46e5; font-size: 1.4rem; }
+
+  /* DB tables */
+  .db-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 16px;
+  }
+  .db-table {
+    background: #111128;
+    border: 1px solid #2a2a4a;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .db-table .table-header {
+    background: #1e1e3a;
+    padding: 8px 14px;
+    font-family: monospace;
+    color: #7dd3fc;
+    font-size: 0.9rem;
+  }
+  .db-table .col {
+    padding: 5px 14px;
+    font-size: 0.82rem;
+    color: #94a3b8;
+    border-top: 1px solid #1a1a30;
+  }
+  .db-table .col.pk { color: #fcd34d; }
+
+  .note {
+    background: #1a1500;
+    border: 1px solid #ca8a04;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 0.88rem;
+    color: #fde68a;
+    margin-top: 12px;
+  }
+
+  hr { border: none; border-top: 1px solid #2d2d4e; margin: 30px 0; }
+</style>
+</head>
+<body>
+
+<h1>🤖 הבאקאנד — מוסבר למפגר</h1>
+<p class="subtitle">כל קובץ, מה הוא עושה, ואיך הכל מתחבר</p>
+
+<!-- BIG PICTURE -->
+<div class="section">
+  <h2>🗺️ התמונה הגדולה — מה הבוט בכלל עושה?</h2>
+  <p class="desc">מישהו שולח הודעה לחשבון Telegram של המודל. הבוט שומר את זה, ואחרי X שעות — שולח follow-up אוטומטי שנכתב על ידי GPT.</p>
+
+  <div class="flow" style="margin-top:24px">
+    <div class="flow-box">
+      <div class="icon">👤</div>
+      <div class="label">משתמש שולח הודעה בTelegram</div>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-box highlight">
+      <div class="icon">🤖</div>
+      <div class="label">הבוט מקבל את ההודעה</div>
+      <div class="sub">שומר בPostgres + Mongo</div>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-box">
+      <div class="icon">⏰</div>
+      <div class="label">Scheduler מחכה X שעות</div>
+      <div class="sub">כל 5 דקות בודק מי צריך follow-up</div>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-box highlight">
+      <div class="icon">🧠</div>
+      <div class="label">GPT כותב הודעה מותאמת אישית</div>
+      <div class="sub">לפי היסטוריית שיחה + system prompt</div>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-box green-box">
+      <div class="icon">📨</div>
+      <div class="label">הודעה נשלחת למשתמש</div>
+      <div class="sub">אפשר גם עם וידאו מS3</div>
+    </div>
+  </div>
+</div>
+
+<!-- FILES OVERVIEW -->
+<div class="section">
+  <h2>📁 כל הקבצים — מה כל אחד עושה?</h2>
+  <div class="files-grid">
+
+    <div class="file-card">
+      <div class="fn">⚙️ config.py</div>
+      <div class="desc">כל ה-settings של האפליקציה — מה שנקרא מקובץ .env</div>
+      <div class="role">סיסמאות, API keys, URLs של הדאטה-בייסים</div>
+    </div>
+
+    <div class="file-card">
+      <div class="fn">🚀 main.py</div>
+      <div class="desc">נקודת הכניסה — מה קורה כשהשרת עולה</div>
+      <div class="role">מאתחל DB, מפעיל scheduler, מתחבר לTelegram</div>
+    </div>
+
+    <div class="file-card">
+      <div class="fn">🗄️ database.py</div>
+      <div class="desc">הגדרת כל הטבלאות בPostgres</div>
+      <div class="role">חשבונות, שיחות, stages, וידאוים, לוג הודעות</div>
+    </div>
+
+    <div class="file-card">
+      <div class="fn">🍃 mongo.py</div>
+      <div class="desc">שמירה וקריאה של היסטוריית שיחות מMongoDB</div>
+      <div class="role">כל הודעה שנשלחה/התקבלה נשמרת פה לGPT</div>
+    </div>
+
+    <div class="file-card">
+      <div class="fn">🌐 routes.py</div>
+      <div class="desc">כל ה-API endpoints — מה שה-frontend קורא</div>
+      <div class="role">login, stages, videos, conversations, telegram</div>
+    </div>
+
+    <div class="file-card">
+      <div class="fn">📱 telegram_service.py</div>
+      <div class="desc">הלב של הבוט — מתחבר לTelegram ושולח הודעות</div>
+      <div class="role">מקבל הודעות נכנסות, מריץ follow-ups</div>
+    </div>
+
+    <div class="file-card">
+      <div class="fn">⏰ scheduler.py</div>
+      <div class="desc">טיימר שרץ כל 5 דקות ובודק מי צריך follow-up</div>
+      <div class="role">כמו cron job — רץ ברקע כל הזמן</div>
+    </div>
+
+    <div class="file-card">
+      <div class="fn">🧠 llm_service.py</div>
+      <div class="desc">מדבר עם GPT ומקבל הודעת follow-up</div>
+      <div class="role">שולח system prompt + היסטוריה, מקבל JSON עם הודעה ווידאו</div>
+    </div>
+
+    <div class="file-card">
+      <div class="fn">☁️ s3_service.py</div>
+      <div class="desc">מעלה/מוריד וידאוים מAWS S3</div>
+      <div class="role">כשמחליטים לשלוח וידאו, הוא מוריד מS3 ושולח בTelegram</div>
+    </div>
+
+    <div class="file-card">
+      <div class="fn">📋 schemas.py</div>
+      <div class="desc">הגדרת צורת הנתונים שנכנסים ויוצאים מה-API</div>
+      <div class="role">וולידציה — מה מותר לשלוח לAPI ומה חוזר</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- HOW FILES CONNECT -->
+<div class="section">
+  <h2>🔗 איך הקבצים מדברים אחד עם השני?</h2>
+  <p class="desc" style="margin-bottom:20px">כשמגיעה הודעה מהמשתמש ↓</p>
+
+  <div class="hflow">
+    <div class="hbox"><span class="icon">📱</span>telegram_service</div>
+    <div class="harrow">→</div>
+    <div class="hbox"><span class="icon">🍃</span>mongo.py<br><small>שומר הודעה</small></div>
+  </div>
+  <div class="hflow">
+    <div class="hbox"><span class="icon">📱</span>telegram_service</div>
+    <div class="harrow">→</div>
+    <div class="hbox"><span class="icon">🗄️</span>database.py<br><small>שומר/מעדכן conversation</small></div>
+  </div>
+
+  <p class="desc" style="margin: 20px 0 10px">כל 5 דקות — scheduler מפעיל follow-up ↓</p>
+
+  <div class="hflow">
+    <div class="hbox"><span class="icon">⏰</span>scheduler</div>
+    <div class="harrow">→</div>
+    <div class="hbox"><span class="icon">📱</span>telegram_service<br><small>run_follow_ups()</small></div>
+    <div class="harrow">→</div>
+    <div class="hbox"><span class="icon">🗄️</span>database<br><small>מי צריך follow-up?</small></div>
+  </div>
+  <div class="hflow" style="margin-top:8px">
+    <div class="hbox"><span class="icon">📱</span>telegram_service</div>
+    <div class="harrow">→</div>
+    <div class="hbox"><span class="icon">🍃</span>mongo<br><small>היסטוריית שיחה</small></div>
+    <div class="harrow">→</div>
+    <div class="hbox"><span class="icon">🧠</span>llm_service<br><small>GPT כותב הודעה</small></div>
+  </div>
+  <div class="hflow" style="margin-top:8px">
+    <div class="hbox"><span class="icon">🧠</span>llm_service</div>
+    <div class="harrow">→</div>
+    <div class="hbox"><span class="icon">☁️</span>s3_service<br><small>מוריד וידאו אם צריך</small></div>
+    <div class="harrow">→</div>
+    <div class="hbox"><span class="icon">✉️</span>שולח הודעה<br><small>+ וידאו בTelegram</small></div>
+  </div>
+</div>
+
+<!-- DB TABLES -->
+<div class="section">
+  <h2>🗄️ מה שמור בPostgres — הטבלאות</h2>
+  <div class="db-grid">
+
+    <div class="db-table">
+      <div class="table-header">📱 telegram_accounts</div>
+      <div class="col pk">id (מזהה)</div>
+      <div class="col">name (שם המודל)</div>
+      <div class="col">phone (מספר טלפון)</div>
+      <div class="col">session_string (session שמור)</div>
+      <div class="col">is_connected (מחובר?)</div>
+    </div>
+
+    <div class="db-table">
+      <div class="table-header">💬 conversations</div>
+      <div class="col pk">id (מזהה)</div>
+      <div class="col">telegram_user_id (מי הלקוח)</div>
+      <div class="col">steps_sent (כמה follow-ups נשלחו)</div>
+      <div class="col">last_user_message_at (מתי כתב לאחרונה)</div>
+      <div class="col">opted_out (ביקש להפסיק)</div>
+    </div>
+
+    <div class="db-table">
+      <div class="table-header">📋 follow_up_stages</div>
+      <div class="col pk">id (מזהה)</div>
+      <div class="col">position (סדר — stage 1, 2, 3...)</div>
+      <div class="col">delay_hours (כמה שעות לחכות)</div>
+      <div class="col">system_prompt (הוראות לGPT)</div>
+      <div class="col">is_active (פעיל?)</div>
+    </div>
+
+    <div class="db-table">
+      <div class="table-header">🎬 videos</div>
+      <div class="col pk">id (מזהה)</div>
+      <div class="col">s3_key (נתיב בAWS)</div>
+      <div class="col">filename (שם הקובץ)</div>
+      <div class="col">tags (תגיות)</div>
+      <div class="col">description (תיאור)</div>
+    </div>
+
+    <div class="db-table">
+      <div class="table-header">📝 sent_message_logs</div>
+      <div class="col pk">id (מזהה)</div>
+      <div class="col">message_text (הטקסט שנשלח)</div>
+      <div class="col">sent_at (מתי)</div>
+      <div class="col">success (הצליח?)</div>
+      <div class="col">error (שגיאה אם נכשל)</div>
+    </div>
+
+    <div class="db-table" style="border-color:#22c55e">
+      <div class="table-header" style="background:#052e16; color:#86efac">🍃 MongoDB — chat_messages</div>
+      <div class="col">account_id</div>
+      <div class="col">telegram_user_id</div>
+      <div class="col">role (user / assistant)</div>
+      <div class="col">content (תוכן ההודעה)</div>
+      <div class="col">timestamp</div>
+    </div>
+
+  </div>
+  <div class="note">
+    💡 MongoDB שומר את <strong>היסטוריית השיחה</strong> — כדי שGPT יוכל לראות מה נאמר קודם ולכתוב follow-up שמתאים להקשר
+  </div>
+</div>
+
+<!-- FOLLOW-UP FLOW -->
+<div class="section">
+  <h2>🔄 איך עובד ה-follow-up — שלב שלב</h2>
+
+  <div class="flow">
+    <div class="flow-box">
+      <div class="icon">👤</div>
+      <div class="label">לקוח כתב הודעה</div>
+      <div class="sub">steps_sent = 0, last_user_message_at = עכשיו</div>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-box">
+      <div class="icon">⏰</div>
+      <div class="label">Scheduler בודק כל 5 דקות</div>
+      <div class="sub">האם עברו X שעות מאז ההודעה האחרונה?</div>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-box highlight">
+      <div class="icon">🧠</div>
+      <div class="label">GPT מקבל: system prompt + כל השיחה</div>
+      <div class="sub">ומחזיר JSON עם הודעה + אולי video_id</div>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-box green-box">
+      <div class="icon">📨</div>
+      <div class="label">Follow-up נשלח — Stage 1 ✓</div>
+      <div class="sub">steps_sent = 1, last_follow_up_at = עכשיו</div>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-box">
+      <div class="icon">⏳</div>
+      <div class="label">ממתין לפי delay של Stage 2</div>
+      <div class="sub">ואז שולח שוב — עד שכלו כל ה-stages</div>
+    </div>
+  </div>
+
+  <div class="note">
+    🛑 אם הלקוח כותב "stop" — opted_out = true ולא יקבל עוד הודעות.<br>
+    🔁 אם הלקוח שולח הודעה חדשה — steps_sent מתאפס ומתחיל מחדש מStage 1
+  </div>
+</div>
+
+<!-- STARTUP SEQUENCE -->
+<div class="section">
+  <h2>🚀 מה קורה כשהשרת עולה (main.py)</h2>
+  <div class="flow">
+    <div class="flow-box"><div class="icon">1️⃣</div><div class="label">init_db()</div><div class="sub">יוצר טבלאות בPostgres אם לא קיימות</div></div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-box"><div class="icon">2️⃣</div><div class="label">init_mongo()</div><div class="sub">יוצר indexes בMongoDB</div></div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-box"><div class="icon">3️⃣</div><div class="label">seed_defaults()</div><div class="sub">אם אין חשבונות + יש session בenv — יוצר חשבון ראשון</div></div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-box"><div class="icon">4️⃣</div><div class="label">start_scheduler()</div><div class="sub">מפעיל טיימר — כל 5 דקות בודק follow-ups</div></div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-box green-box"><div class="icon">5️⃣</div><div class="label">connect_all()</div><div class="sub">מתחבר לכל חשבונות Telegram</div></div>
+  </div>
+</div>
+
+<!-- ENV VARS -->
+<div class="section">
+  <h2>🔑 ה-.env — מה צריך להיות שם</h2>
+  <div class="pill-list">
+    <span class="pill red">ADMIN_PASSWORD — סיסמת הכניסה לpanel</span>
+    <span class="pill blue">TELEGRAM_API_ID + TELEGRAM_API_HASH — מtelegram.org</span>
+    <span class="pill purple">OPENAI_API_KEY — בלי זה GPT לא עובד</span>
+    <span class="pill orange">AWS_ACCESS_KEY_ID + AWS_SECRET — בלי זה S3 לא עובד</span>
+    <span class="pill green">DATABASE_URL + MONGODB_URL — כתובות הדאטה-בייסים</span>
+  </div>
+  <div class="note" style="margin-top:16px">
+    💡 אם OPENAI_API_KEY חסר — הבוט עדיין עובד, אבל שולח "Hey! 💕" לכולם במקום הודעה מותאמת
+  </div>
+</div>
+
+</body>
+</html>

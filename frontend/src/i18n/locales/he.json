@@ -24,7 +24,8 @@
     "dashboard": "לוח בקרה",
     "stages": "שלבי follow up",
     "videos": "בנק סרטונים",
-    "telegram": "טלגרם"
+    "telegram": "טלגרם",
+    "simulator": "סימולטור"
   },
   "dashboard": {
     "telegramConnected": "טלגרם מחובר",
@@ -91,6 +92,19 @@
     "uploaded": "הסרטון הועלה בהצלחה!",
     "uploadFailed": "העלאה נכשלה",
     "loadFailed": "טעינה נכשלה"
+  },
+  "simulator": {
+    "title": "סימולטור follow up",
+    "start": "התחל סימולציה",
+    "reset": "אפס",
+    "stageOf": "שלב {{current}}/{{total}}",
+    "nextIn": "follow up הבא בעוד {{hours}} שעות",
+    "complete": "כל השלבים הושלמו",
+    "sendFirstMessage": "שלח הודעה כדי להתחיל",
+    "noMessages": "אין הודעות עדיין — הקלד משהו כלקוח",
+    "inputPlaceholder": "כתוב הודעה כאילו אתה הפאן…",
+    "send": "שלח",
+    "fastForward": "דלג קדימה בזמן"
   },
   "telegram": {
     "accountTitle": "חשבון טלגרם",

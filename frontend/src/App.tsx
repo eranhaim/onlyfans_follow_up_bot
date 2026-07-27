@@ -4,11 +4,12 @@ import { clearToken, getToken } from "./api";
 import LanguageSwitcher from "./components/LanguageSwitcher";
 import DashboardTab from "./DashboardTab";
 import Login from "./Login";
+import SimulatorTab from "./SimulatorTab";
 import StagesTab from "./StagesTab";
 import TelegramTab from "./TelegramTab";
 import VideosTab from "./VideosTab";
 
-type Tab = "dashboard" | "stages" | "videos" | "telegram";
+type Tab = "dashboard" | "stages" | "videos" | "telegram" | "simulator";
 
 export default function App() {
   const { t } = useTranslation();
@@ -50,12 +51,16 @@ export default function App() {
         <button className={`tab ${tab === "telegram" ? "active" : ""}`} onClick={() => setTab("telegram")}>
           {t("tabs.telegram")}
         </button>
+        <button className={`tab ${tab === "simulator" ? "active" : ""}`} onClick={() => setTab("simulator")}>
+          {t("tabs.simulator")}
+        </button>
       </div>
 
       {tab === "dashboard" && <DashboardTab />}
       {tab === "stages" && <StagesTab />}
       {tab === "videos" && <VideosTab />}
       {tab === "telegram" && <TelegramTab />}
+      {tab === "simulator" && <SimulatorTab />}
     </div>
   );
 }

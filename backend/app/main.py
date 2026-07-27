@@ -9,6 +9,7 @@ from app.database import SessionLocal, TelegramAccount, init_db
 from app.mongo import init_mongo
 from app.routes import router
 from app.scheduler import start_scheduler, stop_scheduler
+from app.simulator_routes import router as simulator_router
 from app.telegram_service import telegram_service
 
 logging.basicConfig(level=logging.INFO)
@@ -53,3 +54,4 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(router)
+app.include_router(simulator_router)
