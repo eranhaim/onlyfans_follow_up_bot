@@ -78,6 +78,7 @@ export type TelegramAccount = {
   name: string;
   phone: string | null;
   is_connected: boolean;
+  personality: string | null;
   created_at: string;
 };
 
@@ -160,6 +161,12 @@ export const api = {
     request<{ ok: boolean }>("/api/telegram/sign-in", {
       method: "POST",
       body: JSON.stringify({ phone, code, phone_code_hash, password }),
+    }),
+
+  updateAccount: (id: number, data: { name?: string; personality?: string }) =>
+    request<TelegramAccount>(`/api/telegram/accounts/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
     }),
 
   runNow: () => request<{ sent: number }>("/api/telegram/run-now", { method: "POST" }),

@@ -4,10 +4,10 @@ import { clearToken, getToken } from "./api";
 import LanguageSwitcher from "./components/LanguageSwitcher";
 import DashboardTab from "./DashboardTab";
 import Login from "./Login";
+import ModelTab from "./ModelTab";
 import SimulatorTab from "./SimulatorTab";
 import StagesTab from "./StagesTab";
 import TelegramTab from "./TelegramTab";
-import VideosTab from "./VideosTab";
 
 type Tab = "dashboard" | "stages" | "videos" | "telegram" | "simulator";
 
@@ -46,7 +46,7 @@ export default function App() {
           {t("tabs.stages")}
         </button>
         <button className={`tab ${tab === "videos" ? "active" : ""}`} onClick={() => setTab("videos")}>
-          {t("tabs.videos")}
+          {t("tabs.model")}
         </button>
         <button className={`tab ${tab === "telegram" ? "active" : ""}`} onClick={() => setTab("telegram")}>
           {t("tabs.telegram")}
@@ -58,7 +58,7 @@ export default function App() {
 
       {tab === "dashboard" && <DashboardTab />}
       {tab === "stages" && <StagesTab />}
-      {tab === "videos" && <VideosTab />}
+      {tab === "videos" && <ModelTab />}
       {tab === "telegram" && <TelegramTab />}
       {tab === "simulator" && <SimulatorTab />}
     </div>

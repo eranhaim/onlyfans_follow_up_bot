@@ -25,7 +25,21 @@
     "stages": "שלבי follow up",
     "videos": "בנק סרטונים",
     "telegram": "טלגרם",
+    "model": "מיוצגת",
     "simulator": "סימולטור"
+  },
+  "model": {
+    "title": "פרופיל מיוצגת",
+    "selectAccount": "בחר מיוצגת",
+    "personalityTitle": "אישיות",
+    "editPersonality": "ערוך",
+    "noPersonality": "אישיות לא הוגדרה עדיין.",
+    "nameLabel": "שם המיוצגת",
+    "personalityLabel": "אישיות (מוזרקת לכל follow-up)",
+    "personalityPlaceholder": "לדוגמה: את מודל OnlyFans חוצפנית ובוטחת. את מדברת בסגנון פלרטטני ועז. את משתמשת באימוג'ים. את כותבת הודעות קצרות.",
+    "save": "שמור",
+    "cancel": "ביטול",
+    "personalitySaved": "נשמר!"
   },
   "dashboard": {
     "telegramConnected": "טלגרם מחובר",

@@ -25,7 +25,21 @@
     "stages": "Follow-Up Stages",
     "videos": "Video Bank",
     "telegram": "Telegram",
+    "model": "Model",
     "simulator": "Simulator"
+  },
+  "model": {
+    "title": "Model Profile",
+    "selectAccount": "Select model",
+    "personalityTitle": "Personality",
+    "editPersonality": "Edit",
+    "noPersonality": "No personality set yet.",
+    "nameLabel": "Model name",
+    "personalityLabel": "Personality (injected into every follow-up)",
+    "personalityPlaceholder": "E.g.: You are a flirty, bold OnlyFans model. You speak in a confident, teasing tone. You use emojis. You write short messages.",
+    "save": "Save",
+    "cancel": "Cancel",
+    "personalitySaved": "Saved!"
   },
   "dashboard": {
     "telegramConnected": "Telegram connected",

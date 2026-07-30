@@ -58,9 +58,15 @@ class TelegramAccountOut(BaseModel):
     name: str
     phone: str | None
     is_connected: bool
+    personality: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class TelegramAccountUpdate(BaseModel):
+    name: str | None = None
+    personality: str | None = None
 
 
 class TelegramSendCode(BaseModel):

@@ -18,6 +18,7 @@ class TelegramAccount(Base):
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     session_string: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_connected: Mapped[bool] = mapped_column(Boolean, default=False)
+    personality: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     conversations: Mapped[list["Conversation"]] = relationship(back_populates="account", cascade="all, delete-orphan")

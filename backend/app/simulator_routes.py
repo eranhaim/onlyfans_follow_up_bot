@@ -31,6 +31,7 @@ class SimMessage:
 class SimSession:
     session_id: str
     account_id: int
+    personality: Optional[str]      # snapshot of account personality
     stages: list                    # snapshot of active FollowUpStage dicts
     videos: list                    # snapshot of Video dicts
     messages: list                  # list[SimMessage]
@@ -68,8 +69,11 @@ def _tick(session: SimSession) -> None:
         history = [{"role": m.role, "content": m.content} for m in session.messages]
         if llm_ready():
             try:
+                full_prompt = stage["system_prompt"]
+                if session.personality and session.personality.strip():
+                    full_prompt = session.personality.strip() + "\n\n" + full_prompt
                 result = generate_follow_up(
-                    system_prompt=stage["system_prompt"],
+                    system_prompt=full_prompt,
                     chat_history=history,
                     available_videos=session.videos if session.videos else None,
                 )
@@ -164,6 +168,7 @@ def start_session(body: StartBody, db: Session = Depends(get_db), _: str = Depen
     session = SimSession(
         session_id=str(uuid.uuid4()),
         account_id=body.account_id,
+        personality=account.personality,
         stages=stages,
         videos=videos,
         messages=[],

@@ -14,6 +14,7 @@ from app.schemas import (
     LoginResponse,
     ReorderStages,
     TelegramAccountOut,
+    TelegramAccountUpdate,
     TelegramSendCode,
     TelegramSignIn,
     TelegramTestSend,
@@ -255,6 +256,20 @@ def list_telegram_accounts(db: Session = Depends(get_db)) -> list[TelegramAccoun
 @router.get("/telegram/account", response_model=TelegramAccountOut | None, dependencies=[Depends(require_admin)])
 def get_telegram_account(db: Session = Depends(get_db)) -> TelegramAccount | None:
     return db.query(TelegramAccount).order_by(TelegramAccount.id).first()
+
+
+@router.patch("/telegram/accounts/{account_id}", response_model=TelegramAccountOut, dependencies=[Depends(require_admin)])
+def update_telegram_account(account_id: int, body: TelegramAccountUpdate, db: Session = Depends(get_db)) -> TelegramAccount:
+    account = db.query(TelegramAccount).filter(TelegramAccount.id == account_id).one_or_none()
+    if account is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if body.name is not None:
+        account.name = body.name
+    if body.personality is not None:
+        account.personality = body.personality
+    db.commit()
+    db.refresh(account)
+    return account
 
 
 @router.delete("/telegram/accounts/{account_id}", dependencies=[Depends(require_admin)])
