@@ -1,12 +1,77 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, Conversation, DashboardStats } from "./api";
+import { api, Conversation, DashboardStats, FanProfile } from "./api";
+
+function FanProfilePanel({ conversationId, onClose }: { conversationId: number; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [profile, setProfile] = useState<FanProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.fanProfile(conversationId)
+      .then(setProfile)
+      .catch(() => setProfile({}))
+      .finally(() => setLoading(false));
+  }, [conversationId]);
+
+  return (
+    <div style={{
+      position: "fixed", top: 0, left: 0, bottom: 0, width: 320,
+      background: "#1a1d28", borderRight: "1px solid #2a2f3d",
+      padding: 24, zIndex: 100, overflowY: "auto",
+    }}>
+      <div className="row" style={{ justifyContent: "space-between", marginBottom: 20 }}>
+        <h3 style={{ margin: 0 }}>{t("dashboard.fanProfile")}</h3>
+        <button className="btn secondary" style={{ padding: "2px 10px" }} onClick={onClose}>✕</button>
+      </div>
+
+      {loading ? (
+        <p className="muted">{t("common.loading")}</p>
+      ) : !profile || Object.keys(profile).length === 0 ? (
+        <p className="muted">{t("dashboard.noProfile")}</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {profile.personality_type && (
+            <div>
+              <div style={{ fontSize: 11, color: "#7eb8f7", marginBottom: 4 }}>{t("dashboard.profilePersonality")}</div>
+              <div style={{ color: "#e8eaed" }}>{profile.personality_type}</div>
+            </div>
+          )}
+          {profile.triggers && (
+            <div>
+              <div style={{ fontSize: 11, color: "#7eb8f7", marginBottom: 4 }}>{t("dashboard.profileTriggers")}</div>
+              <div style={{ color: "#e8eaed" }}>{profile.triggers}</div>
+            </div>
+          )}
+          {profile.language && (
+            <div>
+              <div style={{ fontSize: 11, color: "#7eb8f7", marginBottom: 4 }}>{t("dashboard.profileLanguage")}</div>
+              <div style={{ color: "#e8eaed" }}>{profile.language}</div>
+            </div>
+          )}
+          {profile.notes && (
+            <div>
+              <div style={{ fontSize: 11, color: "#7eb8f7", marginBottom: 4 }}>{t("dashboard.profileNotes")}</div>
+              <div style={{ color: "#e8eaed", whiteSpace: "pre-wrap" }}>{profile.notes}</div>
+            </div>
+          )}
+          {profile.updated_at && (
+            <div style={{ fontSize: 11, color: "#555", marginTop: 8 }}>
+              {t("dashboard.profileUpdated")}: {new Date(profile.updated_at).toLocaleString()}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function DashboardTab() {
   const { t, i18n } = useTranslation();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [error, setError] = useState("");
+  const [selectedConvId, setSelectedConvId] = useState<number | null>(null);
 
   const dateLocale = i18n.language === "he" ? "he-IL" : "en-US";
 
@@ -32,6 +97,7 @@ export default function DashboardTab() {
   }, []);
 
   async function optOut(id: number) {
+    if (!confirm(t("dashboard.optOutConfirm"))) return;
     await api.optOut(id);
     await load();
   }
@@ -87,11 +153,19 @@ export default function DashboardTab() {
                 <td>{c.steps_sent}</td>
                 <td>{fmt(c.last_follow_up_at)}</td>
                 <td>
-                  {!c.opted_out && (
-                    <button className="btn secondary" onClick={() => void optOut(c.id)}>
-                      {t("dashboard.optOut")}
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      className="btn secondary"
+                      onClick={() => setSelectedConvId(c.id === selectedConvId ? null : c.id)}
+                    >
+                      {t("dashboard.details")}
                     </button>
-                  )}
+                    {!c.opted_out && (
+                      <button className="btn danger" onClick={() => void optOut(c.id)}>
+                        {t("dashboard.optOut")}
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -99,6 +173,13 @@ export default function DashboardTab() {
         </table>
         {conversations.length === 0 && <p className="muted">{t("dashboard.noConversations")}</p>}
       </div>
+
+      {selectedConvId !== null && (
+        <FanProfilePanel
+          conversationId={selectedConvId}
+          onClose={() => setSelectedConvId(null)}
+        />
+      )}
     </div>
   );
 }

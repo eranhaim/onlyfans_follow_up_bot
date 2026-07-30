@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, simulator, SimState, SimMessage, TelegramAccount } from "./api";
+import { api, simulator, SimState, SimMessage, SimConversation, TelegramAccount } from "./api";
 
 // ---- Sub-components ----
 
@@ -82,6 +82,8 @@ export default function SimulatorTab() {
   const { t } = useTranslation();
   const [accounts, setAccounts] = useState<TelegramAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
+  const [conversations, setConversations] = useState<SimConversation[]>([]);
+  const [selectedConvId, setSelectedConvId] = useState<number | "new" | null>(null);
   const [session, setSession] = useState<SimState | null>(null);
   const [userInput, setUserInput] = useState("");
   const [advanceHours, setAdvanceHours] = useState("24");
@@ -97,15 +99,22 @@ export default function SimulatorTab() {
   }, []);
 
   useEffect(() => {
+    simulator.listConversations()
+      .then(setConversations)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [session?.messages]);
 
   async function startSession() {
-    if (selectedAccountId === null) return;
+    if (selectedAccountId === null || selectedConvId === null) return;
     setError("");
     setLoading(true);
     try {
-      const state = await simulator.start(selectedAccountId);
+      const convId = selectedConvId === "new" ? undefined : selectedConvId;
+      const state = await simulator.start(selectedAccountId, convId);
       setSession(state);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("common.error"));
@@ -164,35 +173,70 @@ export default function SimulatorTab() {
     <div className="card" style={{ maxWidth: 700 }}>
       <h2>{t("simulator.title")}</h2>
 
-      {/* Account selector + controls */}
-      <div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-        <select
-          value={selectedAccountId ?? ""}
-          onChange={(e) => setSelectedAccountId(Number(e.target.value))}
-          disabled={!!session}
-          style={{ flex: 1 }}
-        >
-          {accounts.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}{a.phone ? ` (${a.phone})` : ""}
-            </option>
-          ))}
-        </select>
-        {!session ? (
-          <button className="btn primary" onClick={startSession} disabled={loading || selectedAccountId === null}>
+      {/* Account + conversation selector */}
+      {!session && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
+          <div className="field" style={{ margin: 0 }}>
+            <label>{t("simulator.selectModel")}</label>
+            <select
+              value={selectedAccountId ?? ""}
+              onChange={(e) => setSelectedAccountId(Number(e.target.value))}
+            >
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}{a.phone ? ` (${a.phone})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="field" style={{ margin: 0 }}>
+            <label>{t("simulator.selectFan")}</label>
+            <select
+              value={selectedConvId ?? ""}
+              onChange={(e) => setSelectedConvId(e.target.value === "new" ? "new" : Number(e.target.value))}
+            >
+              <option value="">{t("simulator.chooseFan")}</option>
+              <option value="new">➕ {t("simulator.newFan")}</option>
+              {conversations.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.display_name} ({c.account_name})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            className="btn primary"
+            onClick={startSession}
+            disabled={loading || selectedAccountId === null || selectedConvId === null}
+          >
             {loading ? t("common.loading") : t("simulator.start")}
           </button>
-        ) : (
-          <button className="btn secondary" onClick={resetSession}>
-            {t("simulator.reset")}
-          </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {error && <p style={{ color: "#f44", marginBottom: 8 }}>{error}</p>}
 
       {session && (
         <>
+          {/* Header */}
+          <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
+            <div style={{ fontSize: 13, color: "#aaa" }}>
+              {session.fan_display_name && (
+                <span style={{ color: "#7eb8f7", fontWeight: 600, marginRight: 8 }}>
+                  👤 {session.fan_display_name}
+                </span>
+              )}
+              {session.fan_profile?.personality_type && (
+                <span style={{ color: "#888" }}>· {session.fan_profile.personality_type}</span>
+              )}
+            </div>
+            <button className="btn secondary" onClick={resetSession} style={{ padding: "4px 12px" }}>
+              {t("simulator.reset")}
+            </button>
+          </div>
+
           {/* Status bar */}
           <div
             style={{
@@ -214,9 +258,7 @@ export default function SimulatorTab() {
             {session.sequence_complete ? (
               <span style={{ color: "#4caf50" }}>✓ {t("simulator.complete")}</span>
             ) : session.hours_until_next !== null ? (
-              <span>
-                {t("simulator.nextIn", { hours: session.hours_until_next })}
-              </span>
+              <span>{t("simulator.nextIn", { hours: session.hours_until_next })}</span>
             ) : (
               <span style={{ color: "#666" }}>{t("simulator.sendFirstMessage")}</span>
             )}

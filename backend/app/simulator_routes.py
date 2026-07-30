@@ -8,8 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.database import get_db, FollowUpStage, Video, TelegramAccount
+from app.database import get_db, Conversation, FollowUpStage, Video, TelegramAccount
 from app.llm_service import generate_follow_up, llm_ready
+from app.mongo import get_chat_history, get_fan_profile
 from app.routes import require_admin
 
 router = APIRouter(prefix="/api/simulator", tags=["simulator"])
@@ -32,6 +33,7 @@ class SimSession:
     session_id: str
     account_id: int
     personality: Optional[str]      # snapshot of account personality
+    fan_profile: Optional[dict]     # snapshot of fan profile (if loaded from conversation)
     stages: list                    # snapshot of active FollowUpStage dicts
     videos: list                    # snapshot of Video dicts
     messages: list                  # list[SimMessage]
@@ -39,6 +41,7 @@ class SimSession:
     sim_now: datetime
     last_user_message_at: Optional[datetime]
     last_follow_up_at: Optional[datetime]
+    fan_display_name: Optional[str] = None
     created_at: datetime = field(default_factory=datetime.utcnow)
 
 
@@ -76,6 +79,7 @@ def _tick(session: SimSession) -> None:
                     system_prompt=full_prompt,
                     chat_history=history,
                     available_videos=session.videos if session.videos else None,
+                    fan_profile=session.fan_profile,
                 )
             except Exception:
                 result = {"message": "Hey! 💕", "video_id": None}
@@ -122,11 +126,14 @@ def _to_dict(session: SimSession) -> dict:
         "next_follow_up_due_at": next_due.isoformat() if next_due else None,
         "hours_until_next": round(hours_until, 2) if hours_until is not None else None,
         "sequence_complete": session.steps_sent >= len(active),
+        "fan_display_name": session.fan_display_name,
+        "fan_profile": session.fan_profile,
     }
 
 
 class StartBody(BaseModel):
     account_id: int
+    conversation_id: Optional[int] = None  # if set, load history + fan profile from this conversation
 
 
 class MessageBody(BaseModel):
@@ -135,6 +142,27 @@ class MessageBody(BaseModel):
 
 class AdvanceBody(BaseModel):
     hours: float
+
+
+@router.get("/conversations")
+def list_conversations_for_sim(db: Session = Depends(get_db), _: str = Depends(require_admin)):
+    """Return all conversations across all accounts for simulator fan selection."""
+    convs = (
+        db.query(Conversation, TelegramAccount.name)
+        .join(TelegramAccount, Conversation.account_id == TelegramAccount.id)
+        .filter(Conversation.opted_out.is_(False))
+        .order_by(Conversation.last_user_message_at.desc().nullslast())
+        .all()
+    )
+    return [
+        {
+            "id": c.Conversation.id,
+            "display_name": c.Conversation.display_name or str(c.Conversation.telegram_user_id),
+            "account_name": c.name,
+            "steps_sent": c.Conversation.steps_sent,
+        }
+        for c in convs
+    ]
 
 
 @router.post("/start")
@@ -165,17 +193,51 @@ def start_session(body: StartBody, db: Session = Depends(get_db), _: str = Depen
         {"id": v.id, "filename": v.filename, "description": v.description, "tags": v.tags}
         for v in videos_q
     ]
+    # Load existing conversation if specified
+    preloaded_messages = []
+    fan_profile = None
+    fan_display_name = None
+    steps_sent = 0
+    last_user_message_at = None
+    last_follow_up_at = None
+
+    if body.conversation_id:
+        conv = db.query(Conversation).filter(
+            Conversation.id == body.conversation_id,
+        ).one_or_none()
+        if conv is None:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        fan_display_name = conv.display_name
+        steps_sent = conv.steps_sent
+        last_user_message_at = conv.last_user_message_at
+        last_follow_up_at = conv.last_follow_up_at
+        fan_profile = get_fan_profile(conv.account_id, conv.telegram_user_id)
+        history = get_chat_history(conv.account_id, conv.telegram_user_id)
+        preloaded_messages = [
+            SimMessage(
+                role=msg["role"] if msg["role"] in ("user", "bot") else ("bot" if msg["role"] == "assistant" else "user"),
+                content=msg["content"],
+                stage_position=None,
+                video_id=None,
+                video_filename=None,
+                sim_time=msg.get("timestamp", datetime.utcnow()).isoformat() if hasattr(msg.get("timestamp", ""), "isoformat") else str(msg.get("timestamp", "")),
+            )
+            for msg in history
+        ]
+
     session = SimSession(
         session_id=str(uuid.uuid4()),
         account_id=body.account_id,
         personality=account.personality,
+        fan_profile=fan_profile,
         stages=stages,
         videos=videos,
-        messages=[],
-        steps_sent=0,
+        messages=preloaded_messages,
+        steps_sent=steps_sent,
         sim_now=datetime.utcnow(),
-        last_user_message_at=None,
-        last_follow_up_at=None,
+        last_user_message_at=last_user_message_at,
+        last_follow_up_at=last_follow_up_at,
+        fan_display_name=fan_display_name,
     )
     with _sessions_lock:
         _cleanup(_sessions)

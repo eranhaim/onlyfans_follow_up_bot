@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import Conversation, FollowUpStage, SentMessageLog, TelegramAccount, Video, get_db
+from app.mongo import get_fan_profile
 from app.schemas import (
     ConversationOut,
     DashboardStats,
@@ -234,6 +235,15 @@ def list_conversations(account_id: int | None = None, db: Session = Depends(get_
     if account_id is not None:
         q = q.filter(Conversation.account_id == account_id)
     return q.order_by(Conversation.last_user_message_at.desc().nullslast()).limit(200).all()
+
+
+@router.get("/conversations/{conversation_id}/fan-profile", dependencies=[Depends(require_admin)])
+def get_conversation_fan_profile(conversation_id: int, db: Session = Depends(get_db)) -> dict:
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).one_or_none()
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    profile = get_fan_profile(conversation.account_id, conversation.telegram_user_id)
+    return profile or {}
 
 
 @router.post("/conversations/{conversation_id}/opt-out", dependencies=[Depends(require_admin)])

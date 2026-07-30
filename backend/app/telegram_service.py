@@ -17,8 +17,8 @@ from app.database import (
     TelegramAccount,
     Video,
 )
-from app.mongo import store_message, get_chat_history, delete_chat_history
-from app.llm_service import generate_follow_up, llm_ready
+from app.mongo import store_message, get_chat_history, delete_chat_history, get_fan_profile, save_fan_profile
+from app.llm_service import generate_follow_up, analyze_fan, llm_ready
 from app.s3_service import download_video, s3_ready
 
 logger = logging.getLogger(__name__)
@@ -102,6 +102,20 @@ class TelegramService:
 
             # Store in MongoDB
             store_message(account_id, user_id, "user", text)
+
+            # Analyze fan profile in background (non-blocking)
+            if llm_ready() and text:
+                def _update_profile(acc_id: int, u_id: int) -> None:
+                    try:
+                        history = get_chat_history(acc_id, u_id)
+                        existing = get_fan_profile(acc_id, u_id)
+                        profile = analyze_fan(history, existing)
+                        if profile:
+                            save_fan_profile(acc_id, u_id, profile)
+                    except Exception:
+                        logger.exception("Failed to analyze fan profile for user %s", u_id)
+
+                asyncio.get_event_loop().run_in_executor(None, _update_profile, account_id, user_id)
 
             db = SessionLocal()
             try:
@@ -368,10 +382,12 @@ class TelegramService:
                             full_prompt = stage.system_prompt
                             if account.personality and account.personality.strip():
                                 full_prompt = account.personality.strip() + "\n\n" + full_prompt
+                            fan_profile = get_fan_profile(account.id, conversation.telegram_user_id)
                             result = generate_follow_up(
                                 system_prompt=full_prompt,
                                 chat_history=history,
                                 available_videos=video_list,
+                                fan_profile=fan_profile,
                             )
                             message_text = result["message"]
                             video_id = result.get("video_id")

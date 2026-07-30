@@ -73,6 +73,14 @@ export type Conversation = {
   opted_out: boolean;
 };
 
+export type FanProfile = {
+  personality_type?: string;
+  triggers?: string;
+  language?: string;
+  notes?: string;
+  updated_at?: string;
+};
+
 export type TelegramAccount = {
   id: number;
   name: string;
@@ -142,6 +150,9 @@ export const api = {
   optOut: (id: number) =>
     request<{ ok: boolean }>(`/api/conversations/${id}/opt-out`, { method: "POST" }),
 
+  fanProfile: (id: number) =>
+    request<FanProfile>(`/api/conversations/${id}/fan-profile`),
+
   // Telegram
   telegramStatus: () =>
     request<{ connected: boolean; username?: string; first_name?: string }>("/api/telegram/status"),
@@ -183,6 +194,13 @@ export type SimMessage = {
   sim_time: string;
 };
 
+export type SimConversation = {
+  id: number;
+  display_name: string;
+  account_name: string;
+  steps_sent: number;
+};
+
 export type SimState = {
   session_id: string;
   account_id: number;
@@ -197,13 +215,18 @@ export type SimState = {
   next_follow_up_due_at: string | null;
   hours_until_next: number | null;
   sequence_complete: boolean;
+  fan_display_name: string | null;
+  fan_profile: FanProfile | null;
 };
 
 export const simulator = {
-  start: (account_id: number) =>
+  listConversations: () =>
+    request<SimConversation[]>(`/api/simulator/conversations`),
+
+  start: (account_id: number, conversation_id?: number) =>
     request<SimState>("/api/simulator/start", {
       method: "POST",
-      body: JSON.stringify({ account_id }),
+      body: JSON.stringify({ account_id, conversation_id: conversation_id ?? null }),
     }),
 
   getSession: (session_id: string) =>

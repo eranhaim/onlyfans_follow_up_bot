@@ -59,8 +59,29 @@ def delete_chat_history(account_id: int, telegram_user_id: int | None = None) ->
     return result.deleted_count
 
 
+def get_fan_profiles_collection() -> Collection:
+    return get_db()["fan_profiles"]
+
+
+def get_fan_profile(account_id: int, telegram_user_id: int) -> dict | None:
+    return get_fan_profiles_collection().find_one(
+        {"account_id": account_id, "telegram_user_id": telegram_user_id},
+        {"_id": 0},
+    )
+
+
+def save_fan_profile(account_id: int, telegram_user_id: int, profile: dict) -> None:
+    get_fan_profiles_collection().update_one(
+        {"account_id": account_id, "telegram_user_id": telegram_user_id},
+        {"$set": {**profile, "account_id": account_id, "telegram_user_id": telegram_user_id, "updated_at": datetime.utcnow()}},
+        upsert=True,
+    )
+
+
 def init_mongo() -> None:
     db = get_db()
     col = db["chat_messages"]
     col.create_index([("account_id", 1), ("telegram_user_id", 1), ("timestamp", -1)])
+    profiles_col = db["fan_profiles"]
+    profiles_col.create_index([("account_id", 1), ("telegram_user_id", 1)], unique=True)
     logger.info("MongoDB initialized (db=%s)", db.name)
