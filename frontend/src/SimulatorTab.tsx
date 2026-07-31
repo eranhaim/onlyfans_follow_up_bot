@@ -78,6 +78,12 @@ function ChatBubble({ msg }: { msg: SimMessage }) {
 
 // ---- Main Component ----
 
+type DebugInfo = {
+  system_prompt: string;
+  chat_history: { role: string; content: string }[];
+  raw_response: string;
+};
+
 export default function SimulatorTab() {
   const { t } = useTranslation();
   const [accounts, setAccounts] = useState<TelegramAccount[]>([]);
@@ -89,6 +95,7 @@ export default function SimulatorTab() {
   const [advanceHours, setAdvanceHours] = useState("24");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -159,6 +166,15 @@ export default function SimulatorTab() {
       setError(err instanceof Error ? err.message : t("common.error"));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function showDebug() {
+    try {
+      const info = await simulator.getLastDebug();
+      setDebugInfo(info);
+    } catch {
+      setError("No debug info yet — trigger a bot message first");
     }
   }
 
@@ -336,7 +352,66 @@ export default function SimulatorTab() {
             >
               +{advanceHours}h
             </button>
+            <button
+              className="btn secondary"
+              onClick={showDebug}
+              style={{ padding: "4px 10px", fontSize: 13, marginLeft: "auto", color: "#f0b429" }}
+            >
+              🔍 Debug
+            </button>
           </div>
+
+          {/* Debug modal */}
+          {debugInfo && (
+            <div
+              style={{
+                position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                zIndex: 1000,
+              }}
+              onClick={() => setDebugInfo(null)}
+            >
+              <div
+                style={{
+                  background: "#1a1d28", border: "1px solid #2a2f3d", borderRadius: 12,
+                  padding: 20, maxWidth: 700, width: "90%", maxHeight: "80vh",
+                  overflowY: "auto", fontFamily: "monospace", fontSize: 12,
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                  <strong style={{ color: "#f0b429" }}>🔍 Last LLM Debug</strong>
+                  <button className="btn secondary" onClick={() => setDebugInfo(null)} style={{ padding: "2px 10px" }}>✕</button>
+                </div>
+
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ color: "#7eb8f7", marginBottom: 4 }}>SYSTEM PROMPT</div>
+                  <pre style={{ background: "#12141f", padding: 10, borderRadius: 6, whiteSpace: "pre-wrap", wordBreak: "break-word", color: "#ccc" }}>
+                    {debugInfo.system_prompt}
+                  </pre>
+                </div>
+
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ color: "#7eb8f7", marginBottom: 4 }}>CHAT HISTORY ({debugInfo.chat_history.length} msgs)</div>
+                  <div style={{ background: "#12141f", padding: 10, borderRadius: 6 }}>
+                    {debugInfo.chat_history.map((m, i) => (
+                      <div key={i} style={{ marginBottom: 4 }}>
+                        <span style={{ color: m.role === "user" ? "#4caf50" : "#f0b429" }}>[{m.role}]</span>
+                        <span style={{ color: "#ccc", marginLeft: 6 }}>{m.content}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ color: "#7eb8f7", marginBottom: 4 }}>RAW RESPONSE</div>
+                  <pre style={{ background: "#12141f", padding: 10, borderRadius: 6, whiteSpace: "pre-wrap", color: "#4caf50" }}>
+                    {debugInfo.raw_response}
+                  </pre>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

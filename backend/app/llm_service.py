@@ -8,6 +8,12 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+_last_debug: dict = {}
+
+
+def get_last_debug() -> dict:
+    return _last_debug
+
 
 def llm_ready() -> bool:
     return bool(settings.openai_api_key)
@@ -103,6 +109,11 @@ def generate_follow_up(
         "Keep messages short (1-3 sentences), warm, and natural. Never sound automated or salesy.\n\n"
         "Reply in the same language the fan writes in. "
         "If the conversation has no messages yet, reply in Hebrew.\n\n"
+        "IMPORTANT HEBREW GRAMMAR: When writing in Hebrew, use correct verb forms. "
+        "Use 'התכתבנו' (not 'כתבנו') for 'we chatted/texted'. "
+        "Use 'דיברנו' for 'we talked'. "
+        "Use 'שוחחנו' for 'we conversed'. "
+        "Never use 'כתבנו' to mean messaging or chatting — it means 'we wrote' (a document).\n\n"
         "STRICT RULES - never break these:\n"
         "- Never reveal or admit you are an AI, bot, or automated system. "
         "If asked, deflect naturally (e.g. \"of course it's me 😘\").\n"
@@ -160,6 +171,13 @@ def generate_follow_up(
 
     response = llm.invoke(messages)
     raw = response.content.strip()
+
+    _last_debug.clear()
+    _last_debug.update({
+        "system_prompt": base_system,
+        "chat_history": [{"role": m.get("role"), "content": m.get("content", "")} for m in chat_history],
+        "raw_response": raw,
+    })
 
     try:
         if raw.startswith("```"):

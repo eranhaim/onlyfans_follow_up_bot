@@ -246,4 +246,7 @@ export const simulator = {
 
   deleteSession: (session_id: string) =>
     request<{ ok: boolean }>(`/api/simulator/${session_id}`, { method: "DELETE" }),
+
+  getLastDebug: () =>
+    request<{ system_prompt: string; chat_history: { role: string; content: string }[]; raw_response: string }>("/api/simulator/debug/last-prompt"),
 };

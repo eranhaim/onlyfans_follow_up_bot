@@ -12,7 +12,8 @@ from app.scheduler import start_scheduler, stop_scheduler
 from app.simulator_routes import router as simulator_router
 from app.telegram_service import telegram_service
 
-logging.basicConfig(level=logging.INFO)
+import sys
+logging.basicConfig(level=logging.INFO, force=True, handlers=[logging.StreamHandler(sys.stderr)])
 logger = logging.getLogger(__name__)
 
 

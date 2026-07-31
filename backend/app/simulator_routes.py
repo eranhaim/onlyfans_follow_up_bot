@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db, Conversation, FollowUpStage, Video, TelegramAccount
-from app.llm_service import generate_follow_up, llm_ready
+from app.llm_service import generate_follow_up, llm_ready, get_last_debug
 from app.mongo import get_chat_history, get_fan_profile
 from app.routes import require_admin
 
@@ -57,48 +57,47 @@ def _cleanup(sessions: dict) -> None:
 
 
 def _tick(session: SimSession) -> None:
-    """Fire all follow-up stages that are due at or before session.sim_now."""
+    """Fire the next follow-up stage if it is due at or before session.sim_now."""
     active = [s for s in session.stages if s["is_active"]]
-    while session.steps_sent < len(active):
-        stage = active[session.steps_sent]
-        ref = session.last_user_message_at
-        if session.steps_sent > 0:
-            ref = session.last_follow_up_at or session.last_user_message_at
-        if ref is None:
-            break
-        due_at = ref + timedelta(hours=stage["delay_hours"])
-        if session.sim_now < due_at:
-            break
-        history = [{"role": m.role, "content": m.content} for m in session.messages]
-        if llm_ready():
-            try:
-                full_prompt = stage["system_prompt"]
-                if session.personality and session.personality.strip():
-                    full_prompt = session.personality.strip() + "\n\n" + full_prompt
-                result = generate_follow_up(
-                    system_prompt=full_prompt,
-                    chat_history=history,
-                    available_videos=session.videos if session.videos else None,
-                    fan_profile=session.fan_profile,
-                )
-            except Exception:
-                result = {"message": "Hey! 💕", "video_id": None}
-        else:
+    if session.steps_sent >= len(active):
+        return
+    stage = active[session.steps_sent]
+    ref = session.last_user_message_at if session.steps_sent == 0 else (session.last_follow_up_at or session.last_user_message_at)
+    if ref is None:
+        return
+    due_at = ref + timedelta(hours=stage["delay_hours"])
+    if session.sim_now < due_at:
+        return
+    history = [{"role": m.role, "content": m.content} for m in session.messages]
+    if llm_ready():
+        try:
+            full_prompt = stage["system_prompt"]
+            if session.personality and session.personality.strip():
+                full_prompt = session.personality.strip() + "\n\n" + full_prompt
+            result = generate_follow_up(
+                system_prompt=full_prompt,
+                chat_history=history,
+                available_videos=session.videos if session.videos else None,
+                fan_profile=session.fan_profile,
+            )
+        except Exception:
             result = {"message": "Hey! 💕", "video_id": None}
-        vid_filename = None
-        if result.get("video_id"):
-            vid = next((v for v in session.videos if v["id"] == result["video_id"]), None)
-            vid_filename = vid["filename"] if vid else None
-        session.messages.append(SimMessage(
-            role="bot",
-            content=result["message"],
-            stage_position=stage["position"],
-            video_id=result.get("video_id"),
-            video_filename=vid_filename,
-            sim_time=due_at.isoformat(),
-        ))
-        session.steps_sent += 1
-        session.last_follow_up_at = due_at
+    else:
+        result = {"message": "Hey! 💕", "video_id": None}
+    vid_filename = None
+    if result.get("video_id"):
+        vid = next((v for v in session.videos if v["id"] == result["video_id"]), None)
+        vid_filename = vid["filename"] if vid else None
+    session.messages.append(SimMessage(
+        role="bot",
+        content=result["message"],
+        stage_position=stage["position"],
+        video_id=result.get("video_id"),
+        video_filename=vid_filename,
+        sim_time=due_at.isoformat(),
+    ))
+    session.steps_sent += 1
+    session.last_follow_up_at = due_at
 
 
 def _to_dict(session: SimSession) -> dict:
@@ -208,9 +207,7 @@ def start_session(body: StartBody, db: Session = Depends(get_db), _: str = Depen
         if conv is None:
             raise HTTPException(status_code=404, detail="Conversation not found")
         fan_display_name = conv.display_name
-        steps_sent = conv.steps_sent
         last_user_message_at = conv.last_user_message_at
-        last_follow_up_at = conv.last_follow_up_at
         fan_profile = get_fan_profile(conv.account_id, conv.telegram_user_id)
         history = get_chat_history(conv.account_id, conv.telegram_user_id)
         preloaded_messages = [
@@ -225,6 +222,8 @@ def start_session(body: StartBody, db: Session = Depends(get_db), _: str = Depen
             for msg in history
         ]
 
+    sim_now = last_user_message_at if last_user_message_at else datetime.utcnow()
+
     session = SimSession(
         session_id=str(uuid.uuid4()),
         account_id=body.account_id,
@@ -234,7 +233,7 @@ def start_session(body: StartBody, db: Session = Depends(get_db), _: str = Depen
         videos=videos,
         messages=preloaded_messages,
         steps_sent=steps_sent,
-        sim_now=datetime.utcnow(),
+        sim_now=sim_now,
         last_user_message_at=last_user_message_at,
         last_follow_up_at=last_follow_up_at,
         fan_display_name=fan_display_name,
@@ -290,3 +289,8 @@ def delete_session(session_id: str, _: str = Depends(require_admin)):
     with _sessions_lock:
         _sessions.pop(session_id, None)
     return {"ok": True}
+
+
+@router.get("/debug/last-prompt")
+def get_last_prompt(_: str = Depends(require_admin)):
+    return get_last_debug()
