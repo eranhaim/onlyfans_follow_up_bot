@@ -388,6 +388,7 @@ class TelegramService:
                                 chat_history=history,
                                 available_videos=video_list,
                                 fan_profile=fan_profile,
+                                stage_index=conversation.steps_sent,
                             )
                             message_text = result["message"]
                             video_id = result.get("video_id")

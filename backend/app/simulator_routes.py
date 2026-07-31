@@ -79,6 +79,7 @@ def _tick(session: SimSession) -> None:
                 chat_history=history,
                 available_videos=session.videos if session.videos else None,
                 fan_profile=session.fan_profile,
+                stage_index=session.steps_sent,
             )
         except Exception:
             result = {"message": "Hey! 💕", "video_id": None}
