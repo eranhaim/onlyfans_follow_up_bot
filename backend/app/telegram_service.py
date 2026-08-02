@@ -379,16 +379,14 @@ class TelegramService:
                     if llm_ready() and stage.system_prompt.strip():
                         try:
                             history = get_chat_history(account.id, conversation.telegram_user_id)
-                            full_prompt = stage.system_prompt
-                            if account.personality and account.personality.strip():
-                                full_prompt = account.personality.strip() + "\n\n" + full_prompt
                             fan_profile = get_fan_profile(account.id, conversation.telegram_user_id)
                             result = generate_follow_up(
-                                system_prompt=full_prompt,
+                                system_prompt=stage.system_prompt,
                                 chat_history=history,
                                 available_videos=video_list,
                                 fan_profile=fan_profile,
                                 stage_index=conversation.steps_sent,
+                                personality=account.personality or "",
                             )
                             message_text = result["message"]
                             video_id = result.get("video_id")

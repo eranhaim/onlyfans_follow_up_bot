@@ -71,15 +71,13 @@ def _tick(session: SimSession) -> None:
     history = [{"role": m.role, "content": m.content} for m in session.messages]
     if llm_ready():
         try:
-            full_prompt = stage["system_prompt"]
-            if session.personality and session.personality.strip():
-                full_prompt = session.personality.strip() + "\n\n" + full_prompt
             result = generate_follow_up(
-                system_prompt=full_prompt,
+                system_prompt=stage["system_prompt"],
                 chat_history=history,
                 available_videos=session.videos if session.videos else None,
                 fan_profile=session.fan_profile,
                 stage_index=session.steps_sent,
+                personality=session.personality or "",
             )
         except Exception:
             result = {"message": "Hey! 💕", "video_id": None}

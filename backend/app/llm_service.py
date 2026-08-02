@@ -92,10 +92,10 @@ def generate_follow_up(
     available_videos: list[dict] | None = None,
     fan_profile: dict | None = None,
     stage_index: int = 0,
+    personality: str = "",
 ) -> dict:
     """
     Generate a follow-up message using GPT.
-
     Returns: {"message": str, "video_id": int | None}
     """
     if not llm_ready():
@@ -107,80 +107,73 @@ def generate_follow_up(
         temperature=0.9,
     )
 
-    messages: list = []
+    # 1. תפקיד + אישיות הדוגמנית
+    role_block = (
+        "You are an OnlyFans model sending a personal follow-up message to a fan who went quiet.\n"
+        "Write ONLY in the model's voice — as if she is typing this herself right now.\n\n"
+    )
+    if personality and personality.strip():
+        role_block += f"WHO YOU ARE:\n{personality.strip()}\n\n"
 
-    hardcoded_rules = (
-        "You are a follow-up assistant for an OnlyFans model. "
-        "Your job is to write short, personal messages in the model's voice to fans who have gone quiet. "
-        "The goal is to re-engage them — make them feel missed, curious, or excited to come back. "
-        "Keep messages short (1-3 sentences), warm, and natural. Never sound automated or salesy.\n\n"
-        "LANGUAGE RULE — this overrides everything else: always write in the same language the fan uses. "
-        "The instructions above may be in English — ignore that, it doesn't affect the output language. "
-        "If the fan writes in Hebrew → reply in Hebrew. If in English → reply in English. "
-        "If the conversation has no messages yet, reply in Hebrew.\n\n"
-        "IMPORTANT HEBREW GRAMMAR: When writing in Hebrew, use correct verb forms. "
-        "Use 'התכתבנו' (not 'כתבנו') for 'we chatted/texted'. "
-        "Use 'דיברנו' for 'we talked'. "
-        "Use 'שוחחנו' for 'we conversed'. "
-        "Never use 'כתבנו' to mean messaging or chatting — it means 'we wrote' (a document).\n\n"
-        "STRICT RULES - never break these:\n"
-        "- Never reveal or admit you are an AI, bot, or automated system. "
-        "If asked, deflect naturally (e.g. \"of course it's me 😘\").\n"
-        "- Never promise specific content (e.g. \"I'll send you X\").\n"
-        "- Never mention prices, payments, or subscriptions — redirect fans to OnlyFans.\n"
-        "- Never include links or external URLs unless explicitly instructed in the prompt below.\n"
+    # 2. חוקים קשיחים
+    rules_block = (
+        "RULES (never break these):\n"
+        "- Never reveal you are AI or automated. If asked, deflect naturally.\n"
+        "- Never promise specific content.\n"
+        "- Never mention prices or subscriptions.\n"
+        "- No links unless the stage goal says so.\n"
+        "- LANGUAGE: always write in the same language the fan uses. "
+        "Instructions are in English — that does NOT affect output language. "
+        "Hebrew fan → Hebrew reply. English fan → English reply.\n"
+        "- HEBREW GRAMMAR: 'התכתבנו' (not 'כתבנו'), 'דיברנו' (not 'אמרנו').\n\n"
     )
 
-    if stage_index == 0:
-        stage_context = (
-            "This is the FIRST follow-up message after the fan went quiet. "
-            "Keep it light and warm — a gentle nudge, not pushy."
+    # 3. מה ידוע על הפאן — הכי חשוב
+    if fan_profile:
+        fan_block = "WHO YOU'RE WRITING TO:\n"
+        if fan_profile.get("first_name"):
+            fan_block += f"- His name: {fan_profile['first_name']}\n"
+        fan_block += f"- Personality: {fan_profile.get('personality_type', '—')}\n"
+        fan_block += f"- What works on him: {fan_profile.get('triggers', '—')}\n"
+        fan_block += f"- About him: {fan_profile.get('personal_details', fan_profile.get('notes', '—'))}\n"
+        fan_block += f"- Things to bring up: {fan_profile.get('conversation_hooks', '—')}\n"
+        fan_block += (
+            "\nCRITICAL: Your message MUST reference something real and specific from his life or your conversation. "
+            "Do NOT send a generic message. Make him feel like you actually remember him.\n\n"
         )
     else:
-        stage_context = (
-            f"This is follow-up #{stage_index + 1}. The fan already received a previous message and still hasn't replied. "
-            "Do NOT repeat what was said before. Take a completely different angle — different tone, different hook. "
-            "Maybe more personal, maybe more playful, maybe more mysterious. Just not the same as last time."
+        fan_block = ""
+
+    # 4. מטרת ה-stage
+    goal_block = f"YOUR GOAL FOR THIS MESSAGE:\n{system_prompt.strip()}\n\n"
+
+    # 5. הקשר stage (ראשון/שני)
+    if stage_index == 0:
+        ctx_block = "CONTEXT: First reach-out after he went quiet. Keep it light — a soft, personal nudge.\n\n"
+    else:
+        ctx_block = (
+            f"CONTEXT: This is message #{stage_index + 1}. He didn't reply to your previous message. "
+            "Take a COMPLETELY DIFFERENT approach — different emotion, different hook, different angle. "
+            "Do not repeat or reference what you wrote last time.\n\n"
         )
 
-    base_system = hardcoded_rules + "\n---\n\n" + system_prompt.strip() + f"\n\n---\n{stage_context}"
-
-    if fan_profile:
-        base_system += (
-            "\n\n---\n"
-            "FAN PROFILE — this is what you know about this specific person. Use it:\n"
-            f"- Personality: {fan_profile.get('personality_type', '—')}\n"
-            f"- What triggers him: {fan_profile.get('triggers', '—')}\n"
-            f"- Language: {fan_profile.get('language', '—')}\n"
-            f"- Personal details: {fan_profile.get('personal_details', fan_profile.get('notes', '—'))}\n"
-            f"- Conversation hooks (things to bring up): {fan_profile.get('conversation_hooks', '—')}\n"
-            f"- Notes: {fan_profile.get('notes', '—')}\n\n"
-            "CRITICAL: Your message MUST reference something specific from his life or your conversation. "
-            "Do NOT send a generic message. If he works nights — mention it. If he said he thinks about you — use that. "
-            "Make him feel like you actually remember him."
-        )
+    # 6. פורמט
     if available_videos:
         video_info = json.dumps(available_videos, ensure_ascii=False)
-        base_system += (
-            "\n\n---\n"
-            "You may optionally send a video with your message. "
-            "Here are the available videos:\n"
-            f"{video_info}\n\n"
-            "If you want to include a video, respond in this exact JSON format:\n"
-            '{"message": "your message text", "video_id": <id>}\n\n'
-            "If you don't want to include a video, respond in this format:\n"
-            '{"message": "your message text", "video_id": null}\n\n'
-            "IMPORTANT: Respond ONLY with valid JSON, nothing else."
+        format_block = (
+            "LENGTH: 1-2 sentences max.\n\n"
+            f"AVAILABLE VIDEOS (optional to include):\n{video_info}\n\n"
+            'Respond ONLY in JSON: {"message": "...", "video_id": <id or null>}\n'
         )
     else:
-        base_system += (
-            "\n\n---\n"
-            "Respond in this exact JSON format:\n"
-            '{"message": "your message text", "video_id": null}\n\n'
-            "IMPORTANT: Respond ONLY with valid JSON, nothing else."
+        format_block = (
+            "LENGTH: 1-2 sentences max.\n\n"
+            'Respond ONLY in JSON: {"message": "...", "video_id": null}\n'
         )
 
-    messages.append(SystemMessage(content=base_system))
+    base_system = role_block + rules_block + fan_block + goal_block + ctx_block + format_block
+
+    messages: list = [SystemMessage(content=base_system)]
 
     for msg in chat_history:
         role = msg.get("role", "user")
@@ -191,10 +184,13 @@ def generate_follow_up(
             messages.append(AIMessage(content=content))
 
     messages.append(HumanMessage(
-        content="The fan has gone silent. Write a short follow-up message in the model's voice. "
-                "Reference something specific from the conversation or from what you know about him — make it feel like you genuinely remembered him, not a copy-paste. "
-                "Do NOT directly reply to his last message — this should feel like you thought of him out of nowhere. "
-                "1-2 sentences max. Respond ONLY in JSON format."
+        content=(
+            "Write the follow-up message now. "
+            "It must feel spontaneous — like you just thought of him out of nowhere. "
+            "Do NOT start every message with 'היי' or 'Hey'. "
+            "Do NOT directly reference his last message. "
+            "Make him want to reply. JSON only."
+        )
     ))
 
     response = llm.invoke(messages)
