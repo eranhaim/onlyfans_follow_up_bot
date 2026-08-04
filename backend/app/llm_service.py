@@ -50,7 +50,7 @@ def analyze_fan(
         "Return ONLY a JSON object with these fields:\n"
         '{"personality_type": "one short label e.g. shy / impulsive / romantic / transactional / lonely", '
         '"triggers": "what motivates him — e.g. feeling special, FOMO, warmth, exclusivity", '
-        '"language": "the language he writes in", '
+        '"language": "ONLY the language code: Hebrew, English, Russian, Arabic, French, etc. — based on what language the fan writes in", '
         '"first_name": "his first name ONLY if he introduced himself by name in the conversation — otherwise leave empty string", '
         '"personal_details": "EVERYTHING he mentioned about himself: job, schedule, hobbies, family, location, age, emotional state, things on his mind — even small details like working night shifts or being shy", '
         '"conversation_hooks": "topics or moments from the conversation that created a connection — things the model can bring up again to feel personal", '
@@ -122,9 +122,8 @@ def generate_follow_up(
         "- Never promise specific content.\n"
         "- Never mention prices or subscriptions.\n"
         "- No links unless the stage goal says so.\n"
-        "- LANGUAGE: always write in the same language the fan uses. "
-        "Instructions are in English — that does NOT affect output language. "
-        "Hebrew fan → Hebrew reply. English fan → English reply.\n"
+        "- LANGUAGE: write ONLY in the language specified in the fan profile under 'language'. "
+        "If it says English → reply in English. Hebrew → Hebrew. Never mix languages.\n"
         "- HEBREW GRAMMAR: 'התכתבנו' (not 'כתבנו'), 'דיברנו' (not 'אמרנו').\n\n"
     )
 
@@ -185,11 +184,12 @@ def generate_follow_up(
 
     messages.append(HumanMessage(
         content=(
-            "Write the follow-up message now. "
-            "It must feel spontaneous — like you just thought of him out of nowhere. "
-            "Do NOT start every message with 'היי' or 'Hey'. "
-            "Do NOT directly reference his last message. "
-            "Make him want to reply. JSON only."
+            "--- The conversation above happened in the past. The fan has been silent since then. ---\n\n"
+            "Now write a NEW standalone follow-up message from the model. "
+            "This is NOT a reply to his last message — it is a fresh message she is sending out of the blue, days later. "
+            "Reference something personal and specific from his life (job, hobby, something he said) to make it feel real. "
+            "Do NOT start with 'היי' or 'Hey' every time. "
+            "Keep it 1-2 sentences. JSON only."
         )
     ))
 
