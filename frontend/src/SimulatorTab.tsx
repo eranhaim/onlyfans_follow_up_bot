@@ -179,9 +179,9 @@ export default function SimulatorTab() {
   async function showDebug() {
     try {
       const info = await simulator.getLastDebug();
-      setDebugInfo(info);
-    } catch {
-      setError("No debug info yet — trigger a bot message first");
+      setDebugInfo(info as DebugInfo);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No debug info yet — trigger a bot message first");
     }
   }
 
@@ -391,33 +391,33 @@ export default function SimulatorTab() {
                   <button className="btn secondary" onClick={() => setDebugInfo(null)} style={{ padding: "2px 10px" }}>✕</button>
                 </div>
 
-                {debugInfo.analysis && (
+                {debugInfo.analysis && typeof debugInfo.analysis === "object" && (
                   <div style={{ marginBottom: 12 }}>
                     <div style={{ color: "#7eb8f7", marginBottom: 6 }}>① ANALYZE</div>
                     <div style={{ background: "#12141f", padding: 10, borderRadius: 6 }}>
                       {Object.entries(debugInfo.analysis).map(([k, v]) => (
                         <div key={k} style={{ marginBottom: 3 }}>
                           <span style={{ color: "#888" }}>{k}: </span>
-                          <span style={{ color: "#ccc" }}>{String(v)}</span>
+                          <span style={{ color: "#ccc" }}>{String(v ?? "")}</span>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {debugInfo.attempts && debugInfo.attempts.length > 0 && (
+                {Array.isArray(debugInfo.attempts) && debugInfo.attempts.length > 0 && (
                   <div style={{ marginBottom: 12 }}>
-                    <div style={{ color: "#7eb8f7", marginBottom: 6 }}>② GENERATE ({debugInfo.retry_count} attempt{debugInfo.retry_count !== 1 ? "s" : ""})</div>
+                    <div style={{ color: "#7eb8f7", marginBottom: 6 }}>② GENERATE ({debugInfo.retry_count ?? debugInfo.attempts.length} attempt{debugInfo.attempts.length !== 1 ? "s" : ""})</div>
                     {debugInfo.attempts.map((a, i) => (
                       <div key={i} style={{ background: "#12141f", padding: 10, borderRadius: 6, marginBottom: 6 }}>
                         <div style={{ color: "#666", fontSize: 11, marginBottom: 4 }}>Attempt {i + 1}</div>
-                        <div style={{ color: "#ccc" }}>{a}</div>
+                        <div style={{ color: "#ccc" }}>{String(a ?? "")}</div>
                       </div>
                     ))}
                   </div>
                 )}
 
-                {debugInfo.last_validation && (
+                {debugInfo.last_validation && typeof debugInfo.last_validation === "object" && (
                   <div style={{ marginBottom: 12 }}>
                     <div style={{ color: "#7eb8f7", marginBottom: 6 }}>③ VALIDATE</div>
                     <div style={{ background: "#12141f", padding: 10, borderRadius: 6 }}>
@@ -425,17 +425,17 @@ export default function SimulatorTab() {
                         {debugInfo.last_validation.pass ? "✓ PASSED" : "✗ FAILED"}
                       </span>
                       {debugInfo.last_validation.reason && (
-                        <span style={{ color: "#888", marginLeft: 8 }}>{debugInfo.last_validation.reason}</span>
+                        <span style={{ color: "#888", marginLeft: 8 }}>{String(debugInfo.last_validation.reason)}</span>
                       )}
                     </div>
                   </div>
                 )}
 
                 {debugInfo.final_message && (
-                  <div>
+                  <div style={{ marginBottom: 12 }}>
                     <div style={{ color: "#7eb8f7", marginBottom: 6 }}>④ FINAL MESSAGE</div>
                     <pre style={{ background: "#12141f", padding: 10, borderRadius: 6, whiteSpace: "pre-wrap", color: "#4caf50" }}>
-                      {debugInfo.final_message}
+                      {String(debugInfo.final_message)}
                     </pre>
                   </div>
                 )}
@@ -446,16 +446,23 @@ export default function SimulatorTab() {
                     <div style={{ marginBottom: 12 }}>
                       <div style={{ color: "#7eb8f7", marginBottom: 4 }}>SYSTEM PROMPT</div>
                       <pre style={{ background: "#12141f", padding: 10, borderRadius: 6, whiteSpace: "pre-wrap", wordBreak: "break-word", color: "#ccc" }}>
-                        {debugInfo.system_prompt}
+                        {String(debugInfo.system_prompt)}
                       </pre>
                     </div>
                     <div>
                       <div style={{ color: "#7eb8f7", marginBottom: 4 }}>RAW RESPONSE</div>
                       <pre style={{ background: "#12141f", padding: 10, borderRadius: 6, whiteSpace: "pre-wrap", color: "#4caf50" }}>
-                        {debugInfo.raw_response}
+                        {String(debugInfo.raw_response ?? "")}
                       </pre>
                     </div>
                   </>
+                )}
+
+                {/* Empty state */}
+                {!debugInfo.analysis && !debugInfo.system_prompt && !debugInfo.final_message && (
+                  <div style={{ color: "#666", textAlign: "center", padding: 20 }}>
+                    No debug data yet — trigger a bot follow-up first (+24h or +48h)
+                  </div>
                 )}
               </div>
             </div>
