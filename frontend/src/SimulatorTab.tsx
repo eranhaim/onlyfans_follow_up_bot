@@ -79,9 +79,16 @@ function ChatBubble({ msg }: { msg: SimMessage }) {
 // ---- Main Component ----
 
 type DebugInfo = {
-  system_prompt: string;
-  chat_history: { role: string; content: string }[];
-  raw_response: string;
+  // LangGraph mode
+  analysis?: { tone?: string; entry_point?: string; angle?: string; avoid?: string; language?: string };
+  attempts?: string[];
+  retry_count?: number;
+  last_validation?: { pass?: boolean; reason?: string };
+  final_message?: string;
+  // Fallback mode
+  system_prompt?: string;
+  chat_history?: { role: string; content: string }[];
+  raw_response?: string;
 };
 
 export default function SimulatorTab() {
@@ -380,35 +387,76 @@ export default function SimulatorTab() {
                 onClick={(e) => e.stopPropagation()}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                  <strong style={{ color: "#f0b429" }}>🔍 Last LLM Debug</strong>
+                  <strong style={{ color: "#f0b429" }}>🔍 LangGraph Debug</strong>
                   <button className="btn secondary" onClick={() => setDebugInfo(null)} style={{ padding: "2px 10px" }}>✕</button>
                 </div>
 
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ color: "#7eb8f7", marginBottom: 4 }}>SYSTEM PROMPT</div>
-                  <pre style={{ background: "#12141f", padding: 10, borderRadius: 6, whiteSpace: "pre-wrap", wordBreak: "break-word", color: "#ccc" }}>
-                    {debugInfo.system_prompt}
-                  </pre>
-                </div>
+                {debugInfo.analysis && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ color: "#7eb8f7", marginBottom: 6 }}>① ANALYZE</div>
+                    <div style={{ background: "#12141f", padding: 10, borderRadius: 6 }}>
+                      {Object.entries(debugInfo.analysis).map(([k, v]) => (
+                        <div key={k} style={{ marginBottom: 3 }}>
+                          <span style={{ color: "#888" }}>{k}: </span>
+                          <span style={{ color: "#ccc" }}>{String(v)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ color: "#7eb8f7", marginBottom: 4 }}>CHAT HISTORY ({debugInfo.chat_history.length} msgs)</div>
-                  <div style={{ background: "#12141f", padding: 10, borderRadius: 6 }}>
-                    {debugInfo.chat_history.map((m, i) => (
-                      <div key={i} style={{ marginBottom: 4 }}>
-                        <span style={{ color: m.role === "user" ? "#4caf50" : "#f0b429" }}>[{m.role}]</span>
-                        <span style={{ color: "#ccc", marginLeft: 6 }}>{m.content}</span>
+                {debugInfo.attempts && debugInfo.attempts.length > 0 && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ color: "#7eb8f7", marginBottom: 6 }}>② GENERATE ({debugInfo.retry_count} attempt{debugInfo.retry_count !== 1 ? "s" : ""})</div>
+                    {debugInfo.attempts.map((a, i) => (
+                      <div key={i} style={{ background: "#12141f", padding: 10, borderRadius: 6, marginBottom: 6 }}>
+                        <div style={{ color: "#666", fontSize: 11, marginBottom: 4 }}>Attempt {i + 1}</div>
+                        <div style={{ color: "#ccc" }}>{a}</div>
                       </div>
                     ))}
                   </div>
-                </div>
+                )}
 
-                <div>
-                  <div style={{ color: "#7eb8f7", marginBottom: 4 }}>RAW RESPONSE</div>
-                  <pre style={{ background: "#12141f", padding: 10, borderRadius: 6, whiteSpace: "pre-wrap", color: "#4caf50" }}>
-                    {debugInfo.raw_response}
-                  </pre>
-                </div>
+                {debugInfo.last_validation && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ color: "#7eb8f7", marginBottom: 6 }}>③ VALIDATE</div>
+                    <div style={{ background: "#12141f", padding: 10, borderRadius: 6 }}>
+                      <span style={{ color: debugInfo.last_validation.pass ? "#4caf50" : "#f44" }}>
+                        {debugInfo.last_validation.pass ? "✓ PASSED" : "✗ FAILED"}
+                      </span>
+                      {debugInfo.last_validation.reason && (
+                        <span style={{ color: "#888", marginLeft: 8 }}>{debugInfo.last_validation.reason}</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {debugInfo.final_message && (
+                  <div>
+                    <div style={{ color: "#7eb8f7", marginBottom: 6 }}>④ FINAL MESSAGE</div>
+                    <pre style={{ background: "#12141f", padding: 10, borderRadius: 6, whiteSpace: "pre-wrap", color: "#4caf50" }}>
+                      {debugInfo.final_message}
+                    </pre>
+                  </div>
+                )}
+
+                {/* Fallback: old debug format */}
+                {debugInfo.system_prompt && (
+                  <>
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ color: "#7eb8f7", marginBottom: 4 }}>SYSTEM PROMPT</div>
+                      <pre style={{ background: "#12141f", padding: 10, borderRadius: 6, whiteSpace: "pre-wrap", wordBreak: "break-word", color: "#ccc" }}>
+                        {debugInfo.system_prompt}
+                      </pre>
+                    </div>
+                    <div>
+                      <div style={{ color: "#7eb8f7", marginBottom: 4 }}>RAW RESPONSE</div>
+                      <pre style={{ background: "#12141f", padding: 10, borderRadius: 6, whiteSpace: "pre-wrap", color: "#4caf50" }}>
+                        {debugInfo.raw_response}
+                      </pre>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}

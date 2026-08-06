@@ -18,7 +18,7 @@ from app.database import (
     Video,
 )
 from app.mongo import store_message, get_chat_history, delete_chat_history, get_fan_profile, save_fan_profile
-from app.llm_service import generate_follow_up, analyze_fan, llm_ready
+from app.llm_service import generate_follow_up, run_follow_up_graph, analyze_fan, llm_ready
 from app.s3_service import download_video, s3_ready
 
 logger = logging.getLogger(__name__)
@@ -380,7 +380,7 @@ class TelegramService:
                         try:
                             history = get_chat_history(account.id, conversation.telegram_user_id)
                             fan_profile = get_fan_profile(account.id, conversation.telegram_user_id)
-                            result = generate_follow_up(
+                            result = run_follow_up_graph(
                                 system_prompt=stage.system_prompt,
                                 chat_history=history,
                                 available_videos=video_list,

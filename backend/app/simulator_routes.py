@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db, Conversation, FollowUpStage, Video, TelegramAccount
-from app.llm_service import generate_follow_up, llm_ready, get_last_debug
+from app.llm_service import run_follow_up_graph, llm_ready, get_last_debug
 from app.mongo import get_chat_history, get_fan_profile
 from app.routes import require_admin
 
@@ -71,7 +71,7 @@ def _tick(session: SimSession) -> None:
     history = [{"role": m.role, "content": m.content} for m in session.messages]
     if llm_ready():
         try:
-            result = generate_follow_up(
+            result = run_follow_up_graph(
                 system_prompt=stage["system_prompt"],
                 chat_history=history,
                 available_videos=session.videos if session.videos else None,
