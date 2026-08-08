@@ -3,10 +3,12 @@ import logging
 from typing import TypedDict, Literal
 
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
+from langchain_core.tools import tool
 from langgraph.graph import StateGraph, END
 
 from app.config import settings
+from app.mongo import search_conversation
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +33,8 @@ class FollowUpState(TypedDict):
     chat_history: list[dict]
     fan_profile: dict | None
     available_videos: list[dict] | None
+    account_id: int | None
+    telegram_user_id: int | None
     # Internal
     analysis: dict
     attempts: list[str]
@@ -42,52 +46,72 @@ class FollowUpState(TypedDict):
     video_id: int | None
 
 
+# ─── Tool: search_conversation ────────────────────────────────────────────────
+# כל tool מקבל decorator @tool — זה מה שאומר ל-LangChain שה-LLM יכול לקרוא לו.
+# ה-docstring הוא מה שה-LLM רואה כדי להחליט אם להשתמש בtool.
+
+def _make_search_tool(account_id: int, telegram_user_id: int):
+    """
+    יוצר tool עם account_id ו-telegram_user_id בתוכו (closure).
+    למה closure? כי @tool לא יכול לקבל פרמטרים דינמיים מה-state —
+    אז אנחנו "אופים" את המזהים לתוך הפונקציה מראש.
+    """
+    @tool
+    def find_in_conversation(query: str) -> str:
+        """Search the fan's conversation history for a specific topic or detail.
+        Use this to find personal information the fan mentioned (job, hobbies, family, etc).
+        Returns the most relevant messages found."""
+        results = search_conversation(account_id, telegram_user_id, query, top_k=4)
+        if not results:
+            return "Nothing found."
+        return "\n".join(f"[score:{r['score']:.2f}] {r['role']}: {r['content']}" for r in results)
+
+    return find_in_conversation
+
+
 # ─── Node: analyze ────────────────────────────────────────────────────────────
 
 def _node_analyze(state: FollowUpState) -> dict:
-    llm = ChatOpenAI(
-        model=settings.openai_model,
-        api_key=settings.openai_api_key,
-        temperature=0.3,
-    )
-
     fan = state["fan_profile"] or {}
-    history_str = "\n".join(
-        f"[{m.get('role')}]: {m.get('content', '')}"
-        for m in state["chat_history"][-20:]
-    )
-
     first_name = fan.get("first_name", "").strip()
     personal_details = fan.get("personal_details", "").strip()
     conversation_hooks = fan.get("conversation_hooks", "").strip()
     personality_type = fan.get("personality_type", "").strip()
     triggers = fan.get("triggers", "").strip()
-    language = fan.get("language", "Hebrew").strip()
     notes = fan.get("notes", "").strip()
+
+    # שפה לפי 2 ההודעות האחרונות של הפן
+    last_user_msgs = [
+        m.get("content", "") for m in reversed(state["chat_history"])
+        if m.get("role") == "user"
+    ][:2]
+
+    def _detect_language(texts: list[str]) -> str:
+        combined = " ".join(texts)
+        hebrew_chars = sum(1 for c in combined if "\u05d0" <= c <= "\u05ea")
+        return "Hebrew" if hebrew_chars > len(combined) * 0.1 else "English"
+
+    language = _detect_language(last_user_msgs) if last_user_msgs else fan.get("language", "Hebrew").strip()
 
     stage_ctx = "first follow-up (gentle nudge)" if state["stage_index"] == 0 else f"follow-up #{state['stage_index'] + 1} — he didn't reply, use a completely different angle"
 
+    bot_followups = [m.get("content", "") for m in state["chat_history"] if m.get("role") in ("assistant", "bot")]
+    already_mentioned = "\n".join(f"- {m}" for m in bot_followups[-3:]) if bot_followups else "none yet"
+
     system = (
         "You are planning a highly personal follow-up message from an OnlyFans model to a specific fan.\n"
-        "Your job: pick ONE concrete thing to reference that will make him feel remembered.\n\n"
-        "Return ONLY a JSON object:\n"
-        '{"tone": "exact emotional tone (e.g. warm and teasing, quietly intimate, playfully curious)", '
-        '"entry_point": "ONE very specific detail from his life or conversation to mention — his job, something he said, a moment you shared. Be concrete, not vague.", '
+        "You have a tool: find_in_conversation(query) — use it to search what the fan said about specific topics.\n"
+        "Search for 2-3 personal details before deciding. Then return ONLY a JSON object:\n"
+        '{"tone": "exact emotional tone", '
+        '"entry_point": "ONE very specific detail from his life — his job, something he said, a moment. Be concrete.", '
         '"name_to_use": "his first name if known, otherwise empty string", '
         '"angle": "the exact psychological need this message speaks to", '
         '"avoid": "what specifically to avoid", '
         '"language": "Hebrew or English"}'
     )
 
-    # זיהוי מה כבר נשלח בפולואו-אפים קודמים (role=assistant אחרי שהפאן שתק)
-    bot_followups = [
-        m.get("content", "") for m in state["chat_history"]
-        if m.get("role") in ("assistant", "bot")
-    ]
-    already_mentioned = "\n".join(f"- {m}" for m in bot_followups[-3:]) if bot_followups else "none yet"
-
     user_msg = (
-        f"WHO THIS FAN IS:\n"
+        f"FAN PROFILE:\n"
         f"- Name: {first_name or '(unknown)'}\n"
         f"- Personality: {personality_type}\n"
         f"- Triggers: {triggers}\n"
@@ -95,15 +119,44 @@ def _node_analyze(state: FollowUpState) -> dict:
         f"- Conversation hooks: {conversation_hooks}\n"
         f"- Notes: {notes}\n"
         f"- Language: {language}\n\n"
-        f"FULL CONVERSATION (including previous follow-ups sent by the model):\n{history_str}\n\n"
-        f"PREVIOUS FOLLOW-UP MESSAGES ALREADY SENT:\n{already_mentioned}\n"
-        f"IMPORTANT: Do NOT pick an entry_point that was already used in previous follow-ups above.\n\n"
+        f"PREVIOUS FOLLOW-UPS SENT:\n{already_mentioned}\n"
+        f"IMPORTANT: Do NOT reuse any entry_point from previous follow-ups.\n\n"
         f"STAGE GOAL: {state['stage_prompt']}\n"
         f"CONTEXT: {stage_ctx}\n\n"
-        "Pick the single most powerful personal detail NOT yet used. Return JSON."
+        "Use find_in_conversation to search for personal details, then return JSON."
     )
 
-    response = llm.invoke([SystemMessage(content=system), HumanMessage(content=user_msg)])
+    # אם יש account_id ו-telegram_user_id — נחבר את ה-tool
+    # אחרת (סימולטור ישן / fallback) — LLM בלי tool
+    account_id = state.get("account_id")
+    telegram_user_id = state.get("telegram_user_id")
+
+    if account_id and telegram_user_id:
+        search_tool = _make_search_tool(account_id, telegram_user_id)
+        llm = ChatOpenAI(model=settings.openai_model, api_key=settings.openai_api_key, temperature=0.3).bind_tools([search_tool])
+        tools_by_name = {search_tool.name: search_tool}
+    else:
+        llm = ChatOpenAI(model=settings.openai_model, api_key=settings.openai_api_key, temperature=0.3)
+        tools_by_name = {}
+
+    messages = [SystemMessage(content=system), HumanMessage(content=user_msg)]
+
+    # לולאת tool-use: ה-LLM קורא ל-tool, מקבל תוצאה, ממשיך לחשוב
+    # זה נקרא "agentic loop" — הLLM מחליט מתי לעצור
+    for _ in range(5):  # מקסימום 5 קריאות tool כדי לא לאבד שליטה
+        response = llm.invoke(messages)
+        messages.append(response)
+
+        if not getattr(response, "tool_calls", None):
+            break  # ה-LLM החליט שסיים — מחזיר JSON
+
+        # מריצים כל tool שה-LLM ביקש
+        for tc in response.tool_calls:
+            fn = tools_by_name.get(tc["name"])
+            if fn:
+                result = fn.invoke(tc["args"])
+                messages.append(ToolMessage(content=str(result), tool_call_id=tc["id"]))
+
     raw = response.content.strip()
 
     try:
@@ -286,6 +339,8 @@ def run_follow_up_graph(
     fan_profile: dict | None = None,
     stage_index: int = 0,
     personality: str = "",
+    account_id: int | None = None,
+    telegram_user_id: int | None = None,
 ) -> dict:
     global _graph
     try:
@@ -299,6 +354,8 @@ def run_follow_up_graph(
             "chat_history": chat_history,
             "fan_profile": fan_profile,
             "available_videos": available_videos,
+            "account_id": account_id,
+            "telegram_user_id": telegram_user_id,
             "analysis": {},
             "attempts": [],
             "retry_count": 0,

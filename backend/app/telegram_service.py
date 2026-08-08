@@ -387,6 +387,8 @@ class TelegramService:
                                 fan_profile=fan_profile,
                                 stage_index=conversation.steps_sent,
                                 personality=account.personality or "",
+                                account_id=account.id,
+                                telegram_user_id=conversation.telegram_user_id,
                             )
                             message_text = result["message"]
                             video_id = result.get("video_id")
