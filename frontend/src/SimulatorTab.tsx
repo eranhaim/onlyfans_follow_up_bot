@@ -252,7 +252,7 @@ export default function SimulatorTab() {
                 </span>
               )}
               {session.fan_profile?.personality_type && (
-                <span style={{ color: "#888" }}>· {session.fan_profile.personality_type}</span>
+                <span style={{ color: "#888" }}>· {typeof session.fan_profile.personality_type === "string" ? session.fan_profile.personality_type : JSON.stringify(session.fan_profile.personality_type)}</span>
               )}
             </div>
             <button className="btn secondary" onClick={resetSession} style={{ padding: "4px 12px" }}>

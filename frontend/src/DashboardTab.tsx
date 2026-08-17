@@ -2,6 +2,14 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, Conversation, DashboardStats, FanProfile } from "./api";
 
+/** Safely render a profile value — LLM sometimes returns objects instead of strings */
+function str(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return JSON.stringify(value);
+}
+
 function FanProfilePanel({ conversationId, onClose }: { conversationId: number; onClose: () => void }) {
   const { t } = useTranslation();
   const [profile, setProfile] = useState<FanProfile | null>(null);
@@ -34,25 +42,25 @@ function FanProfilePanel({ conversationId, onClose }: { conversationId: number; 
           {profile.personality_type && (
             <div>
               <div style={{ fontSize: 11, color: "#7eb8f7", marginBottom: 4 }}>{t("dashboard.profilePersonality")}</div>
-              <div style={{ color: "#e8eaed" }}>{profile.personality_type}</div>
+              <div style={{ color: "#e8eaed" }}>{str(profile.personality_type)}</div>
             </div>
           )}
           {profile.triggers && (
             <div>
               <div style={{ fontSize: 11, color: "#7eb8f7", marginBottom: 4 }}>{t("dashboard.profileTriggers")}</div>
-              <div style={{ color: "#e8eaed" }}>{profile.triggers}</div>
+              <div style={{ color: "#e8eaed" }}>{str(profile.triggers)}</div>
             </div>
           )}
           {profile.language && (
             <div>
               <div style={{ fontSize: 11, color: "#7eb8f7", marginBottom: 4 }}>{t("dashboard.profileLanguage")}</div>
-              <div style={{ color: "#e8eaed" }}>{profile.language}</div>
+              <div style={{ color: "#e8eaed" }}>{str(profile.language)}</div>
             </div>
           )}
           {profile.notes && (
             <div>
               <div style={{ fontSize: 11, color: "#7eb8f7", marginBottom: 4 }}>{t("dashboard.profileNotes")}</div>
-              <div style={{ color: "#e8eaed", whiteSpace: "pre-wrap" }}>{profile.notes}</div>
+              <div style={{ color: "#e8eaed", whiteSpace: "pre-wrap" }}>{str(profile.notes)}</div>
             </div>
           )}
           {profile.updated_at && (

@@ -30,6 +30,9 @@ export default function ChannelsTab() {
   const [loadingSubs, setLoadingSubs] = useState(false);
   const [subsError, setSubsError] = useState("");
 
+  const [removingAccount, setRemovingAccount] = useState<number | null>(null);
+  const [togglingChannel, setTogglingChannel] = useState<number | null>(null);
+  const [removingChannel, setRemovingChannel] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
@@ -70,7 +73,11 @@ export default function ChannelsTab() {
   }, []);
 
   useEffect(() => {
-    if (selectedAccountId != null) void loadChannels();
+    if (selectedAccountId != null) {
+      void loadChannels();
+      // Auto-sync when selecting an account
+      void syncChannels();
+    }
   }, [selectedAccountId]);
 
   // --- Sign-in ---
@@ -120,6 +127,7 @@ export default function ChannelsTab() {
   async function removeAccount(account: ChannelAccount) {
     if (!confirm(t("channels.removeAccountConfirm", { phone: account.phone || account.name }))) return;
     setError("");
+    setRemovingAccount(account.id);
     try {
       await api.deleteChannelAccount(account.id);
       setInfo(t("channels.accountRemoved"));
@@ -127,6 +135,8 @@ export default function ChannelsTab() {
       await loadAccounts();
     } catch (err) {
       setError(err instanceof Error ? err.message : t("channels.removeAccountFailed"));
+    } finally {
+      setRemovingAccount(null);
     }
   }
 
@@ -149,21 +159,27 @@ export default function ChannelsTab() {
   }
 
   async function toggleActive(channel: TelegramChannel) {
+    setTogglingChannel(channel.id);
     try {
       await api.updateChannel(channel.id, { is_active: !channel.is_active });
       await loadChannels();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setTogglingChannel(null);
     }
   }
 
   async function removeChannel(channel: TelegramChannel) {
     if (!confirm(t("channels.removeConfirm", { title: channel.title }))) return;
+    setRemovingChannel(channel.id);
     try {
       await api.deleteChannel(channel.id);
       await loadChannels();
     } catch (err) {
       setError(err instanceof Error ? err.message : t("channels.removeFailed"));
+    } finally {
+      setRemovingChannel(null);
     }
   }
 
@@ -218,8 +234,8 @@ export default function ChannelsTab() {
                   </td>
                   <td>{new Date(acc.created_at).toLocaleString(dateLocale)}</td>
                   <td>
-                    <button className="btn danger" onClick={() => void removeAccount(acc)}>
-                      {t("channels.removeAccount")}
+                    <button className="btn danger" onClick={() => void removeAccount(acc)} disabled={removingAccount === acc.id}>
+                      {removingAccount === acc.id ? t("common.loading") : t("channels.removeAccount")}
                     </button>
                   </td>
                 </tr>
@@ -327,11 +343,11 @@ export default function ChannelsTab() {
                         <button className="btn secondary" onClick={() => void viewSubscribers(ch)}>
                           {t("channels.viewSubscribers")}
                         </button>
-                        <button className="btn secondary" onClick={() => void toggleActive(ch)}>
-                          {ch.is_active ? t("channels.deactivate") : t("channels.activate")}
+                        <button className="btn secondary" onClick={() => void toggleActive(ch)} disabled={togglingChannel === ch.id}>
+                          {togglingChannel === ch.id ? t("common.loading") : ch.is_active ? t("channels.deactivate") : t("channels.activate")}
                         </button>
-                        <button className="btn danger" onClick={() => void removeChannel(ch)}>
-                          {t("channels.remove")}
+                        <button className="btn danger" onClick={() => void removeChannel(ch)} disabled={removingChannel === ch.id}>
+                          {removingChannel === ch.id ? t("common.loading") : t("channels.remove")}
                         </button>
                       </div>
                     </td>

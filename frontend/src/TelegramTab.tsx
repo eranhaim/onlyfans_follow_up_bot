@@ -16,6 +16,10 @@ export default function TelegramTab() {
   const [info, setInfo] = useState("");
   const [running, setRunning] = useState(false);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
+  const [sendingCode, setSendingCode] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [removing, setRemoving] = useState<number | null>(null);
 
   const dateLocale = i18n.language === "he" ? "he-IL" : "en-US";
 
@@ -31,6 +35,7 @@ export default function TelegramTab() {
   }
 
   async function refresh() {
+    setRefreshing(true);
     try {
       const status = await api.telegramStatus();
       setConnected(status.connected);
@@ -38,6 +43,8 @@ export default function TelegramTab() {
       await loadAccounts();
     } catch (err) {
       setError(err instanceof Error ? err.message : t("telegram.loadFailed"));
+    } finally {
+      setRefreshing(false);
     }
   }
 
@@ -49,18 +56,22 @@ export default function TelegramTab() {
     e.preventDefault();
     setError("");
     setInfo("");
+    setSendingCode(true);
     try {
       const res = await api.sendCode(phone);
       setPhoneCodeHash(res.phone_code_hash);
       setInfo(t("telegram.codeSent"));
     } catch (err) {
       setError(err instanceof Error ? err.message : t("telegram.sendCodeFailed"));
+    } finally {
+      setSendingCode(false);
     }
   }
 
   async function verifyCode(e: FormEvent) {
     e.preventDefault();
     setError("");
+    setVerifying(true);
     try {
       await api.signIn(phone, code, phoneCodeHash, needs2FA ? password : undefined);
       setInfo(t("telegram.connected"));
@@ -78,18 +89,23 @@ export default function TelegramTab() {
       } else {
         setError(msg);
       }
+    } finally {
+      setVerifying(false);
     }
   }
 
   async function removeAccount(account: TelegramAccount) {
     if (!confirm(t("telegram.removeConfirm", { phone: account.phone || account.name }))) return;
     setError("");
+    setRemoving(account.id);
     try {
       await api.deleteTelegramAccount(account.id);
       setInfo(t("telegram.removed"));
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : t("telegram.removeFailed"));
+    } finally {
+      setRemoving(null);
     }
   }
 
@@ -124,8 +140,8 @@ export default function TelegramTab() {
           </p>
         )}
         <div className="row" style={{ marginTop: 12 }}>
-          <button className="btn secondary" onClick={() => void refresh()}>
-            {t("telegram.refreshStatus")}
+          <button className="btn secondary" onClick={() => void refresh()} disabled={refreshing}>
+            {refreshing ? t("common.loading") : t("telegram.refreshStatus")}
           </button>
           <button className="btn" onClick={() => void runNow()} disabled={running || !connected}>
             {running ? t("telegram.running") : t("telegram.runNow")}
@@ -164,8 +180,8 @@ export default function TelegramTab() {
                   </td>
                   <td>{new Date(account.created_at).toLocaleString(dateLocale)}</td>
                   <td>
-                    <button className="btn danger" onClick={() => void removeAccount(account)}>
-                      {t("telegram.remove")}
+                    <button className="btn danger" onClick={() => void removeAccount(account)} disabled={removing === account.id}>
+                      {removing === account.id ? t("common.loading") : t("telegram.remove")}
                     </button>
                   </td>
                 </tr>
@@ -188,8 +204,8 @@ export default function TelegramTab() {
               required
             />
           </div>
-          <button className="btn secondary" type="submit">
-            {t("telegram.sendCode")}
+          <button className="btn secondary" type="submit" disabled={sendingCode}>
+            {sendingCode ? t("common.loading") : t("telegram.sendCode")}
           </button>
         </form>
 
@@ -210,8 +226,8 @@ export default function TelegramTab() {
                 />
               </div>
             )}
-            <button className="btn" type="submit">
-              {t("telegram.verify")}
+            <button className="btn" type="submit" disabled={verifying}>
+              {verifying ? t("common.loading") : t("telegram.verify")}
             </button>
           </form>
         )}
