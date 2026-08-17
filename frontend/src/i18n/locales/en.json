@@ -227,6 +227,7 @@
     "colUsernameSub": "Username",
     "colUserId": "User ID",
     "close": "Close",
+    "exportCsv": "Export CSV",
     "loadFailed": "Failed to load"
   }
 }

@@ -183,6 +183,24 @@ export default function ChannelsTab() {
     }
   }
 
+  function exportSubscribersCsv() {
+    if (!subscribers.length || !subscribersChannel) return;
+    const header = "Name,Username,User ID";
+    const rows = subscribers.map((sub) => {
+      const name = [sub.first_name, sub.last_name].filter(Boolean).join(" ") || "";
+      const username = sub.username ? `@${sub.username}` : "";
+      return `"${name.replace(/"/g, '""')}","${username}",${sub.user_id}`;
+    });
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${subscribersChannel.title}_subscribers.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function viewSubscribers(channel: TelegramChannel) {
     setSubscribersChannel(channel);
     setSubscribers([]);
@@ -364,12 +382,19 @@ export default function ChannelsTab() {
         <div className="card">
           <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
             <h2>{t("channels.subscribersTitle", { title: subscribersChannel.title })}</h2>
-            <button
-              className="btn secondary"
-              onClick={() => setSubscribersChannel(null)}
-            >
-              {t("channels.close")}
-            </button>
+            <div className="row" style={{ gap: 8 }}>
+              {subscribers.length > 0 && (
+                <button className="btn" onClick={() => exportSubscribersCsv()}>
+                  {t("channels.exportCsv")}
+                </button>
+              )}
+              <button
+                className="btn secondary"
+                onClick={() => setSubscribersChannel(null)}
+              >
+                {t("channels.close")}
+              </button>
+            </div>
           </div>
 
           {loadingSubs ? (

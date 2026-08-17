@@ -227,6 +227,7 @@
     "colUsernameSub": "שם משתמש",
     "colUserId": "מזהה משתמש",
     "close": "סגור",
+    "exportCsv": "ייצוא CSV",
     "loadFailed": "טעינה נכשלה"
   }
 }
