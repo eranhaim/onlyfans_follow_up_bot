@@ -19,7 +19,7 @@ from app.database import (
     TelegramChannel,
     Video,
 )
-from app.mongo import store_message, get_chat_history, delete_chat_history, get_fan_profile, save_fan_profile
+from app.mongo import store_message, get_chat_history, delete_chat_history, get_fan_profile, save_fan_profile, get_chat_collection
 from app.llm_service import generate_follow_up, run_follow_up_graph, analyze_fan, llm_ready
 from app.s3_service import download_video, s3_ready
 
@@ -220,7 +220,17 @@ class TelegramService:
         finally:
             db.close()
 
+        # Import existing chat history in background
+        asyncio.ensure_future(self._import_history_background(account_id))
+
         return session_string
+
+    async def _import_history_background(self, account_id: int) -> None:
+        try:
+            result = await self.import_chat_history(account_id)
+            logger.info("Background import done for account %s: %s", account_id, result)
+        except Exception:
+            logger.exception("Background import failed for account %s", account_id)
 
     async def status(self) -> dict:
         db = SessionLocal()
@@ -519,6 +529,106 @@ class TelegramService:
                 offset += limit
 
             return subscribers
+        finally:
+            db.close()
+
+    async def import_chat_history(self, account_id: int, limit_per_dialog: int = 200) -> dict:
+        """Import existing chat history from Telegram into MongoDB.
+
+        Fetches private conversations from the connected account and stores
+        messages that aren't already in MongoDB.
+        """
+        db = SessionLocal()
+        try:
+            account = db.query(TelegramAccount).filter(TelegramAccount.id == account_id).one_or_none()
+            if account is None:
+                raise ValueError("Account not found")
+
+            client = await self.get_client_for_account(account)
+            if client is None:
+                raise ValueError("Telegram account not connected")
+
+            imported_count = 0
+            dialogs_count = 0
+            chat_col = get_chat_collection()
+
+            async for dialog in client.iter_dialogs():
+                if not dialog.is_user:
+                    continue
+                entity = dialog.entity
+                if getattr(entity, "bot", False):
+                    continue
+
+                user_id = entity.id
+                display_name = " ".join(
+                    part for part in [getattr(entity, "first_name", None), getattr(entity, "last_name", None)] if part
+                ) or getattr(entity, "username", None)
+
+                # Check how many messages we already have for this user
+                existing_count = chat_col.count_documents(
+                    {"account_id": account_id, "telegram_user_id": user_id}
+                )
+
+                # If we already have messages, skip (don't re-import)
+                if existing_count > 0:
+                    continue
+
+                # Fetch messages from Telegram (oldest first)
+                messages = []
+                async for msg in client.iter_messages(entity, limit=limit_per_dialog):
+                    if msg.text:
+                        messages.append(msg)
+                messages.reverse()
+
+                if not messages:
+                    continue
+
+                dialogs_count += 1
+                last_user_msg_at = None
+
+                for msg in messages:
+                    role = "assistant" if msg.out else "user"
+                    store_message(account_id, user_id, role, msg.text)
+                    imported_count += 1
+                    if role == "user":
+                        last_user_msg_at = msg.date
+
+                # Create or update Conversation in PostgreSQL
+                conversation = (
+                    db.query(Conversation)
+                    .filter_by(account_id=account_id, telegram_user_id=user_id)
+                    .one_or_none()
+                )
+                if conversation is None:
+                    conversation = Conversation(
+                        account_id=account_id,
+                        telegram_user_id=user_id,
+                        display_name=display_name,
+                        last_user_message_at=last_user_msg_at,
+                        steps_sent=0,
+                    )
+                    db.add(conversation)
+
+                # Analyze fan profile in background
+                if llm_ready():
+                    def _analyze(acc_id: int, u_id: int) -> None:
+                        try:
+                            history = get_chat_history(acc_id, u_id)
+                            existing = get_fan_profile(acc_id, u_id)
+                            profile = analyze_fan(history, existing)
+                            if profile:
+                                save_fan_profile(acc_id, u_id, profile)
+                        except Exception:
+                            logger.exception("Failed to analyze fan profile for user %s", u_id)
+
+                    asyncio.get_event_loop().run_in_executor(None, _analyze, account_id, user_id)
+
+            db.commit()
+            logger.info(
+                "Imported %d messages from %d dialogs for account %s",
+                imported_count, dialogs_count, account_id,
+            )
+            return {"imported_messages": imported_count, "dialogs": dialogs_count}
         finally:
             db.close()
 

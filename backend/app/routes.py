@@ -317,6 +317,15 @@ async def telegram_sign_in(body: TelegramSignIn) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.post("/telegram/accounts/{account_id}/import-history", dependencies=[Depends(require_admin)])
+async def import_chat_history(account_id: int) -> dict:
+    try:
+        result = await telegram_service.import_chat_history(account_id)
+        return {"ok": True, **result}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.post("/telegram/run-now", dependencies=[Depends(require_admin)])
 async def run_follow_ups_now() -> dict:
     sent = await telegram_service.run_follow_ups()

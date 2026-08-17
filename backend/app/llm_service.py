@@ -35,8 +35,10 @@ class FollowUpState(TypedDict):
     available_videos: list[dict] | None
     account_id: int | None
     telegram_user_id: int | None
+    sent_video_ids: list[int]
     # Internal
     analysis: dict
+    chosen_video: dict | None  # הסרטון שdecide_video בחר (או None)
     attempts: list[str]
     retry_count: int
     last_fail_reason: str
@@ -99,14 +101,15 @@ def _node_analyze(state: FollowUpState) -> dict:
     already_mentioned = "\n".join(f"- {m}" for m in bot_followups[-3:]) if bot_followups else "none yet"
 
     system = (
-        "You are planning a highly personal follow-up message from an OnlyFans model to a specific fan.\n"
-        "You have a tool: find_in_conversation(query) — use it to search what the fan said about specific topics.\n"
+        "You are planning a personal follow-up message from an OnlyFans model to a fan who went quiet.\n"
+        "You have a tool: find_in_conversation(query) — use it to find what the fan said about specific topics.\n"
         "Search for 2-3 personal details before deciding. Then return ONLY a JSON object:\n"
-        '{"tone": "exact emotional tone", '
-        '"entry_point": "ONE very specific detail from his life — his job, something he said, a moment. Be concrete.", '
+        '{"tone": "exact emotional tone (e.g. warm, playfully curious, gently teasing)", '
+        '"entry_point": "ONE concrete fact about his life — e.g. \'he works night shifts\', \'he has a dog named Rex\', \'he lives in Haifa\'. '
+        'Must be something HE said. NOT a description of how he felt or reacted. NOT generic.", '
         '"name_to_use": "his first name if known, otherwise empty string", '
-        '"angle": "the exact psychological need this message speaks to", '
-        '"avoid": "what specifically to avoid", '
+        '"angle": "a human emotional angle — e.g. feeling missed, curiosity, warmth. NEVER use FOMO or content promotion.", '
+        '"avoid": "what specifically to avoid in the message", '
         '"language": "Hebrew or English"}'
     )
 
@@ -176,6 +179,63 @@ def _node_analyze(state: FollowUpState) -> dict:
     return {"analysis": analysis}
 
 
+# ─── Node: decide_video ───────────────────────────────────────────────────────
+
+def _node_decide_video(state: FollowUpState) -> dict:
+    """
+    מחליט אם לצרף סרטון להודעה ואיזה.
+
+    כללים:
+    - stage 0 (follow-up ראשון) → לעולם לא לשלוח סרטון, עדיין מוקדם
+    - אם אין סרטונים זמינים → None
+    - מסנן סרטונים שכבר נשלחו לפן הזה
+    - שואל LLM לבחור מתוך הנותרים לפי tone/angle מה-analysis
+    """
+    videos = state.get("available_videos") or []
+    sent_ids = set(state.get("sent_video_ids") or [])
+    analysis = state["analysis"]
+
+    # stage 0 = הודעה ראשונה, עדיין לא לשלוח סרטון
+    if state["stage_index"] == 0 or not videos:
+        return {"chosen_video": None}
+
+    # מסנן סרטונים שכבר נשלחו
+    unseen = [v for v in videos if v.get("id") not in sent_ids]
+    if not unseen:
+        return {"chosen_video": None}
+
+    # אם יש רק אחד — בחר אותו בלי LLM
+    if len(unseen) == 1:
+        return {"chosen_video": unseen[0]}
+
+    # LLM בוחר את הסרטון הכי מתאים לפי הטון והאנגל
+    llm = ChatOpenAI(model=settings.openai_model, api_key=settings.openai_api_key, temperature=0.0)
+
+    videos_str = "\n".join(
+        f"id:{v['id']} tags:{v.get('tags','')} description:{v.get('description','')}"
+        for v in unseen
+    )
+
+    response = llm.invoke([
+        SystemMessage(content="You help choose which video to send a fan. Return ONLY the video id as a number, nothing else."),
+        HumanMessage(content=(
+            f"Tone: {analysis.get('tone')}\n"
+            f"Angle: {analysis.get('angle')}\n"
+            f"Fan entry point: {analysis.get('entry_point')}\n\n"
+            f"Available videos:\n{videos_str}\n\n"
+            "Which video id fits best? Reply with just the number."
+        )),
+    ])
+
+    try:
+        chosen_id = int(response.content.strip())
+        chosen = next((v for v in unseen if v["id"] == chosen_id), unseen[0])
+    except (ValueError, StopIteration):
+        chosen = unseen[0]
+
+    return {"chosen_video": chosen}
+
+
 # ─── Node: generate ───────────────────────────────────────────────────────────
 
 def _node_generate(state: FollowUpState) -> dict:
@@ -222,7 +282,12 @@ def _node_generate(state: FollowUpState) -> dict:
         f"- Avoid: {analysis.get('avoid', '—')}\n"
         f"- Goal: {state['stage_prompt']}\n"
         f"{retry_note}\n\n"
-        f'Respond ONLY in JSON: {{"message": "...", "video_id": null}}'
+        + (
+            f"A VIDEO WILL BE ATTACHED: '{state['chosen_video'].get('description', '')}'. "
+            f"Reference it naturally in your message.\n"
+            if state.get("chosen_video") else ""
+        )
+        + f'Respond ONLY in JSON: {{"message": "..."}}'
     )
 
     trigger = (
@@ -241,10 +306,11 @@ def _node_generate(state: FollowUpState) -> dict:
             raw = raw.split("\n", 1)[1].rsplit("```", 1)[0].strip()
         result = json.loads(raw)
         message = result.get("message", raw)
-        video_id = result.get("video_id")
     except Exception:
         message = raw
-        video_id = None
+
+    # video_id מגיע מ-chosen_video שנבחר ב-decide_video, לא מה-LLM
+    video_id = state["chosen_video"]["id"] if state.get("chosen_video") else None
 
     attempts = state.get("attempts", []) + [message]
 
@@ -276,12 +342,16 @@ def _node_validate(state: FollowUpState) -> dict:
         '{"pass": true/false, "reason": "why it failed, or empty string if passed"}\n\n'
         "FAIL if any of these:\n"
         f"- Does NOT reference or relate to: '{entry_point}'\n"
-        f"- Not written in {language}\n"
-        "- Starts with 'היי', 'Hey', 'Hi', 'שלום' as opening word\n"
-        "- Sounds like a bot, template, or sales pitch\n"
+        f"- Not written entirely in {language} (mixing languages e.g. English words inside Hebrew sentence = FAIL)\n"
+        "- Starts with 'היי', 'Hey', 'Hi', 'שלום', 'Hello' as the very first word\n"
+        "- Sounds like a generic bot template or sales pitch\n"
         "- Longer than 3 sentences\n"
         "- Makes promises about specific content\n"
-        "- Mentions prices or subscriptions"
+        "- Mentions prices or subscriptions\n\n"
+        "PASS if:\n"
+        "- Starts with the fan's name — that's fine and encouraged\n"
+        "- Feels personal and human, references something real from his life\n"
+        "- Written purely in the correct language with no foreign words"
     )
 
     response = llm.invoke([
@@ -320,10 +390,12 @@ def _route_after_validate(state: FollowUpState) -> Literal["generate", "__end__"
 def _build_graph() -> object:
     graph = StateGraph(FollowUpState)
     graph.add_node("analyze", _node_analyze)
+    graph.add_node("decide_video", _node_decide_video)
     graph.add_node("generate", _node_generate)
     graph.add_node("validate", _node_validate)
     graph.set_entry_point("analyze")
-    graph.add_edge("analyze", "generate")
+    graph.add_edge("analyze", "decide_video")
+    graph.add_edge("decide_video", "generate")
     graph.add_edge("generate", "validate")
     graph.add_conditional_edges("validate", _route_after_validate)
     return graph.compile()
@@ -341,6 +413,7 @@ def run_follow_up_graph(
     personality: str = "",
     account_id: int | None = None,
     telegram_user_id: int | None = None,
+    sent_video_ids: list[int] | None = None,
 ) -> dict:
     global _graph
     try:
@@ -356,6 +429,8 @@ def run_follow_up_graph(
             "available_videos": available_videos,
             "account_id": account_id,
             "telegram_user_id": telegram_user_id,
+            "sent_video_ids": sent_video_ids or [],
+            "chosen_video": None,
             "analysis": {},
             "attempts": [],
             "retry_count": 0,
@@ -416,34 +491,33 @@ def analyze_fan(
     existing_str = json.dumps(existing_clean, ensure_ascii=False) if existing_clean else "none yet"
 
     system = (
-        "You are a psychological profiler analyzing a fan's chat messages with an OnlyFans model. "
-        "Extract every personal detail the fan has revealed — explicitly or implicitly.\n\n"
+        "You are a psychological profiler. A fan just sent new messages to an OnlyFans model.\n"
+        "You have the existing profile and the NEW messages only.\n"
+        "Your job: update the profile by MERGING new info into existing — never delete existing details.\n\n"
         "Return ONLY a JSON object with these fields:\n"
         '{"personality_type": "one short label e.g. shy / impulsive / romantic / transactional / lonely", '
         '"triggers": "what motivates him — e.g. feeling special, FOMO, warmth, exclusivity", '
-        '"language": "ONLY the language code: Hebrew, English, Russian, Arabic, French, etc. — based on what language the fan writes in", '
-        '"first_name": "his first name ONLY if he introduced himself by name in the conversation — otherwise leave empty string", '
-        '"personal_details": "EVERYTHING he mentioned about himself: job, schedule, hobbies, family, location, age, emotional state, things on his mind — even small details like working night shifts or being shy", '
-        '"conversation_hooks": "topics or moments from the conversation that created a connection — things the model can bring up again to feel personal", '
-        '"notes": "emotional patterns, what he responds well to, anything else useful"}\n\n'
-        "Be specific — vague notes are useless. If he said he works nights, write that. If he mentioned thinking about the model, write that.\n"
-        "IMPORTANT: Only save a name if the fan explicitly said his name (e.g. 'I am David' / 'call me Dan'). Do NOT infer a name from his username or profile.\n\n"
+        '"language": "ONLY the language code: Hebrew, English, Russian, Arabic, French, etc.", '
+        '"first_name": "his first name ONLY if he explicitly introduced himself — otherwise keep existing or empty string", '
+        '"personal_details": "ALL known details about him — merge existing + new. Job, hobbies, family, location, age, emotional state. Never remove existing details.", '
+        '"conversation_hooks": "topics that created connection — merge existing + new moments", '
+        '"notes": "emotional patterns, what he responds well to — merge existing + new observations"}\n\n'
+        "IMPORTANT: Only save a name if the fan explicitly said his name. Do NOT infer from username.\n"
         "IMPORTANT: Respond ONLY with valid JSON, nothing else."
+    )
+
+    # שולחים רק את ה-3 הודעות האחרונות — לא את כל ההיסטוריה
+    # הפרופיל הקיים כבר מכיל את מה שהיה לפני
+    recent = chat_history[-3:]
+    recent_str = "\n".join(
+        f"{'Fan' if m.get('role') == 'user' else 'Model'}: {m.get('content', '')}"
+        for m in recent
     )
 
     messages: list = [
         SystemMessage(content=system),
-        HumanMessage(content=f"Existing profile: {existing_str}\n\nConversation (fan messages only matter):\n"),
+        HumanMessage(content=f"Existing profile:\n{existing_str}\n\nNew messages:\n{recent_str}\n\nReturn updated profile as JSON."),
     ]
-    for msg in chat_history:
-        role = msg.get("role", "user")
-        content = msg.get("content", "")
-        if role == "user":
-            messages.append(HumanMessage(content=f"Fan: {content}"))
-        else:
-            messages.append(AIMessage(content=f"Model: {content}"))
-
-    messages.append(HumanMessage(content="Now return the updated fan profile as JSON."))
 
     response = llm.invoke(messages)
     raw = response.content.strip()
