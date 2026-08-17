@@ -99,6 +99,38 @@ class ConversationOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# --- Channels ---
+
+class ChannelAccountOut(BaseModel):
+    id: int
+    name: str
+    phone: str | None
+    is_connected: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class TelegramChannelOut(BaseModel):
+    id: int
+    channel_account_id: int
+    channel_id: int
+    title: str
+    username: str | None
+    subscribers_count: int
+    is_active: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ChannelSubscriberOut(BaseModel):
+    user_id: int
+    first_name: str | None = None
+    last_name: str | None = None
+    username: str | None = None
+
+
 # --- Dashboard ---
 
 class DashboardStats(BaseModel):

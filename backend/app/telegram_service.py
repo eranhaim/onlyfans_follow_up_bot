@@ -10,11 +10,13 @@ from telethon.sessions import StringSession
 
 from app.config import settings
 from app.database import (
+    ChannelAccount,
     Conversation,
     FollowUpStage,
     SentMessageLog,
     SessionLocal,
     TelegramAccount,
+    TelegramChannel,
     Video,
 )
 from app.mongo import store_message, get_chat_history, delete_chat_history, get_fan_profile, save_fan_profile
@@ -306,6 +308,220 @@ class TelegramService:
 
         delete_chat_history(account_id)
 
+    # --- Channel Account management ---
+
+    async def _get_channel_client(self, channel_account: ChannelAccount) -> TelegramClient | None:
+        """Get or create a Telethon client for a ChannelAccount."""
+        if not self._api_ready():
+            return None
+        if not channel_account.session_string:
+            return None
+
+        key = f"ch_{channel_account.id}"
+        if key in self._clients:
+            client = self._clients[key]
+            if client.is_connected():
+                return client
+
+        async with self._lock:
+            if key in self._clients and self._clients[key].is_connected():
+                return self._clients[key]
+
+            client = TelegramClient(
+                StringSession(channel_account.session_string),
+                settings.telegram_api_id,
+                settings.telegram_api_hash,
+            )
+            await client.connect()
+            if not await client.is_user_authorized():
+                await client.disconnect()
+                return None
+
+            self._clients[key] = client
+            return client
+
+    async def channel_send_code(self, phone: str) -> str:
+        if not self._api_ready():
+            raise ValueError("Set TELEGRAM_API_ID and TELEGRAM_API_HASH in .env")
+        client = TelegramClient(StringSession(), settings.telegram_api_id, settings.telegram_api_hash)
+        await client.connect()
+        try:
+            result = await client.send_code_request(phone)
+            self._pending_logins[f"ch_{phone}"] = {"client": client, "phone_code_hash": result.phone_code_hash}
+            return result.phone_code_hash
+        except Exception:
+            await client.disconnect()
+            raise
+
+    async def channel_sign_in(self, phone: str, code: str, phone_code_hash: str, password: str | None = None) -> None:
+        pending = self._pending_logins.get(f"ch_{phone}")
+        if pending is None:
+            raise ValueError("No pending login for this phone. Request a code first.")
+
+        client: TelegramClient = pending["client"]
+        try:
+            await client.sign_in(phone=phone, code=code, phone_code_hash=phone_code_hash)
+        except SessionPasswordNeededError:
+            if not password:
+                raise ValueError("Two-factor password required")
+            await client.sign_in(password=password)
+
+        session_string = client.session.save()
+        await client.disconnect()
+        self._pending_logins.pop(f"ch_{phone}", None)
+
+        db = SessionLocal()
+        try:
+            account = db.query(ChannelAccount).filter(ChannelAccount.phone == phone).one_or_none()
+            if account is None:
+                account = ChannelAccount(name="Channel Manager", phone=phone)
+                db.add(account)
+            account.session_string = session_string
+            account.is_connected = True
+            db.commit()
+            db.refresh(account)
+            ca_id = account.id
+        finally:
+            db.close()
+
+        # Reconnect
+        db = SessionLocal()
+        try:
+            account = db.query(ChannelAccount).get(ca_id)
+            if account:
+                await self._get_channel_client(account)
+        finally:
+            db.close()
+
+    async def remove_channel_account(self, channel_account_id: int) -> None:
+        key = f"ch_{channel_account_id}"
+        client = self._clients.pop(key, None)
+        if client:
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
+
+        db = SessionLocal()
+        try:
+            account = db.query(ChannelAccount).filter(ChannelAccount.id == channel_account_id).one_or_none()
+            if account is None:
+                raise ValueError("Channel account not found")
+            db.query(TelegramChannel).filter(TelegramChannel.channel_account_id == channel_account_id).delete(
+                synchronize_session=False
+            )
+            db.delete(account)
+            db.commit()
+        finally:
+            db.close()
+
+    async def sync_channels(self, channel_account_id: int) -> list[dict]:
+        """Fetch channels/groups the channel account administers and sync to DB."""
+        db = SessionLocal()
+        try:
+            account = db.query(ChannelAccount).filter(ChannelAccount.id == channel_account_id).one_or_none()
+            if account is None:
+                raise ValueError("Channel account not found")
+
+            client = await self._get_channel_client(account)
+            if client is None:
+                raise ValueError("Channel account not connected")
+
+            from telethon.tl.types import Channel
+
+            channels_found = []
+            async for dialog in client.iter_dialogs():
+                entity = dialog.entity
+                if not isinstance(entity, Channel):
+                    continue
+                if not (entity.creator or entity.admin_rights):
+                    continue
+
+                full = await client(
+                    __import__("telethon.tl.functions.channels", fromlist=["GetFullChannelRequest"]).GetFullChannelRequest(entity)
+                )
+                participants_count = full.full_chat.participants_count or 0
+
+                existing = db.query(TelegramChannel).filter(
+                    TelegramChannel.channel_id == entity.id
+                ).one_or_none()
+
+                if existing:
+                    existing.title = entity.title or existing.title
+                    existing.username = entity.username
+                    existing.subscribers_count = participants_count
+                    existing.channel_account_id = channel_account_id
+                else:
+                    existing = TelegramChannel(
+                        channel_account_id=channel_account_id,
+                        channel_id=entity.id,
+                        title=entity.title or "Unknown",
+                        username=entity.username,
+                        subscribers_count=participants_count,
+                    )
+                    db.add(existing)
+
+                channels_found.append({
+                    "channel_id": entity.id,
+                    "title": entity.title,
+                    "username": entity.username,
+                    "subscribers_count": participants_count,
+                })
+
+            db.commit()
+            return channels_found
+        finally:
+            db.close()
+
+    async def get_channel_subscribers(self, channel_db_id: int) -> list[dict]:
+        """Fetch subscriber list for a channel."""
+        db = SessionLocal()
+        try:
+            channel = db.query(TelegramChannel).filter(TelegramChannel.id == channel_db_id).one_or_none()
+            if channel is None:
+                raise ValueError("Channel not found")
+
+            account = db.query(ChannelAccount).filter(ChannelAccount.id == channel.channel_account_id).one_or_none()
+            if account is None:
+                raise ValueError("Channel account not found")
+
+            client = await self._get_channel_client(account)
+            if client is None:
+                raise ValueError("Channel account not connected")
+
+            from telethon.tl.functions.channels import GetParticipantsRequest
+            from telethon.tl.types import ChannelParticipantsRecent
+
+            subscribers = []
+            offset = 0
+            limit = 200
+            while True:
+                participants = await client(GetParticipantsRequest(
+                    channel=channel.channel_id,
+                    filter=ChannelParticipantsRecent(),
+                    offset=offset,
+                    limit=limit,
+                    hash=0,
+                ))
+                if not participants.users:
+                    break
+                for user in participants.users:
+                    if getattr(user, "bot", False):
+                        continue
+                    subscribers.append({
+                        "user_id": user.id,
+                        "first_name": getattr(user, "first_name", None),
+                        "last_name": getattr(user, "last_name", None),
+                        "username": getattr(user, "username", None),
+                    })
+                if len(participants.users) < limit:
+                    break
+                offset += limit
+
+            return subscribers
+        finally:
+            db.close()
+
     async def run_follow_ups(self) -> int:
         if not self._api_ready():
             return 0
@@ -380,6 +596,18 @@ class TelegramService:
                         try:
                             history = get_chat_history(account.id, conversation.telegram_user_id)
                             fan_profile = get_fan_profile(account.id, conversation.telegram_user_id)
+
+                            # סרטונים שכבר נשלחו לפן הזה — כדי לא לחזור עליהם
+                            sent_video_ids = [
+                                log.video_id for log in
+                                db.query(SentMessageLog)
+                                .filter(
+                                    SentMessageLog.conversation_id == conversation.id,
+                                    SentMessageLog.video_id.isnot(None),
+                                    SentMessageLog.success.is_(True),
+                                ).all()
+                            ]
+
                             result = run_follow_up_graph(
                                 system_prompt=stage.system_prompt,
                                 chat_history=history,
@@ -389,6 +617,7 @@ class TelegramService:
                                 personality=account.personality or "",
                                 account_id=account.id,
                                 telegram_user_id=conversation.telegram_user_id,
+                                sent_video_ids=sent_video_ids,
                             )
                             message_text = result["message"]
                             video_id = result.get("video_id")

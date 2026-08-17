@@ -3,9 +3,11 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.database import Conversation, FollowUpStage, SentMessageLog, TelegramAccount, Video, get_db
+from app.database import ChannelAccount, Conversation, FollowUpStage, SentMessageLog, TelegramAccount, TelegramChannel, Video, get_db
 from app.mongo import get_fan_profile
 from app.schemas import (
+    ChannelAccountOut,
+    ChannelSubscriberOut,
     ConversationOut,
     DashboardStats,
     FollowUpStageCreate,
@@ -16,6 +18,7 @@ from app.schemas import (
     ReorderStages,
     TelegramAccountOut,
     TelegramAccountUpdate,
+    TelegramChannelOut,
     TelegramSendCode,
     TelegramSignIn,
     TelegramTestSend,
@@ -326,3 +329,86 @@ async def test_send_first_chat(body: TelegramTestSend = TelegramTestSend()) -> d
         return await telegram_service.send_test_to_first_chat(body.message)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+# --- Channel Accounts ---
+
+@router.get("/channel-accounts", response_model=list[ChannelAccountOut], dependencies=[Depends(require_admin)])
+def list_channel_accounts(db: Session = Depends(get_db)) -> list[ChannelAccount]:
+    return db.query(ChannelAccount).order_by(ChannelAccount.created_at.desc()).all()
+
+
+@router.post("/channel-accounts/send-code", dependencies=[Depends(require_admin)])
+async def channel_send_code(body: TelegramSendCode) -> dict:
+    try:
+        phone_code_hash = await telegram_service.channel_send_code(body.phone)
+        return {"phone_code_hash": phone_code_hash}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/channel-accounts/sign-in", dependencies=[Depends(require_admin)])
+async def channel_sign_in(body: TelegramSignIn) -> dict:
+    try:
+        await telegram_service.channel_sign_in(body.phone, body.code, body.phone_code_hash, body.password)
+        return {"ok": True}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete("/channel-accounts/{account_id}", dependencies=[Depends(require_admin)])
+async def delete_channel_account(account_id: int) -> dict:
+    try:
+        await telegram_service.remove_channel_account(account_id)
+        return {"ok": True}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+# --- Channels ---
+
+@router.get("/channels", response_model=list[TelegramChannelOut], dependencies=[Depends(require_admin)])
+def list_channels(channel_account_id: int | None = None, db: Session = Depends(get_db)) -> list[TelegramChannel]:
+    q = db.query(TelegramChannel)
+    if channel_account_id is not None:
+        q = q.filter(TelegramChannel.channel_account_id == channel_account_id)
+    return q.order_by(TelegramChannel.title).all()
+
+
+@router.post("/channels/sync", dependencies=[Depends(require_admin)])
+async def sync_channels(channel_account_id: int) -> dict:
+    try:
+        channels = await telegram_service.sync_channels(channel_account_id)
+        return {"ok": True, "synced": len(channels)}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/channels/{channel_id}/subscribers", response_model=list[ChannelSubscriberOut], dependencies=[Depends(require_admin)])
+async def get_channel_subscribers(channel_id: int) -> list[dict]:
+    try:
+        return await telegram_service.get_channel_subscribers(channel_id)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.patch("/channels/{channel_id}", response_model=TelegramChannelOut, dependencies=[Depends(require_admin)])
+def update_channel(channel_id: int, db: Session = Depends(get_db), is_active: bool | None = None) -> TelegramChannel:
+    channel = db.query(TelegramChannel).filter(TelegramChannel.id == channel_id).one_or_none()
+    if channel is None:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    if is_active is not None:
+        channel.is_active = is_active
+    db.commit()
+    db.refresh(channel)
+    return channel
+
+
+@router.delete("/channels/{channel_id}", dependencies=[Depends(require_admin)])
+def delete_channel(channel_id: int, db: Session = Depends(get_db)) -> dict:
+    channel = db.query(TelegramChannel).filter(TelegramChannel.id == channel_id).one_or_none()
+    if channel is None:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    db.delete(channel)
+    db.commit()
+    return {"ok": True}

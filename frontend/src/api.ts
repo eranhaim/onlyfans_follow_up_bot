@@ -90,6 +90,32 @@ export type TelegramAccount = {
   created_at: string;
 };
 
+export type ChannelAccount = {
+  id: number;
+  name: string;
+  phone: string | null;
+  is_connected: boolean;
+  created_at: string;
+};
+
+export type TelegramChannel = {
+  id: number;
+  channel_account_id: number;
+  channel_id: number;
+  title: string;
+  username: string | null;
+  subscribers_count: number;
+  is_active: boolean;
+  created_at: string;
+};
+
+export type ChannelSubscriber = {
+  user_id: number;
+  first_name: string | null;
+  last_name: string | null;
+  username: string | null;
+};
+
 // --- API ---
 
 export const api = {
@@ -181,6 +207,46 @@ export const api = {
     }),
 
   runNow: () => request<{ sent: number }>("/api/telegram/run-now", { method: "POST" }),
+
+  // Channel Accounts
+  listChannelAccounts: () => request<ChannelAccount[]>("/api/channel-accounts"),
+
+  channelSendCode: (phone: string) =>
+    request<{ phone_code_hash: string }>("/api/channel-accounts/send-code", {
+      method: "POST",
+      body: JSON.stringify({ phone }),
+    }),
+
+  channelSignIn: (phone: string, code: string, phone_code_hash: string, password?: string) =>
+    request<{ ok: boolean }>("/api/channel-accounts/sign-in", {
+      method: "POST",
+      body: JSON.stringify({ phone, code, phone_code_hash, password }),
+    }),
+
+  deleteChannelAccount: (id: number) =>
+    request<{ ok: boolean }>(`/api/channel-accounts/${id}`, { method: "DELETE" }),
+
+  // Channels
+  listChannels: (channelAccountId?: number) =>
+    request<TelegramChannel[]>(
+      channelAccountId != null ? `/api/channels?channel_account_id=${channelAccountId}` : "/api/channels"
+    ),
+
+  syncChannels: (channelAccountId: number) =>
+    request<{ ok: boolean; synced: number }>(`/api/channels/sync?channel_account_id=${channelAccountId}`, {
+      method: "POST",
+    }),
+
+  getChannelSubscribers: (channelId: number) =>
+    request<ChannelSubscriber[]>(`/api/channels/${channelId}/subscribers`),
+
+  updateChannel: (channelId: number, data: { is_active?: boolean }) =>
+    request<TelegramChannel>(`/api/channels/${channelId}?${new URLSearchParams(
+      Object.entries(data).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])
+    )}`, { method: "PATCH" }),
+
+  deleteChannel: (channelId: number) =>
+    request<{ ok: boolean }>(`/api/channels/${channelId}`, { method: "DELETE" }),
 };
 
 // --- Simulator Types ---

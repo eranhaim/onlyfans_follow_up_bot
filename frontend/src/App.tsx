@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { clearToken, getToken } from "./api";
+import ChannelsTab from "./ChannelsTab";
 import LanguageSwitcher from "./components/LanguageSwitcher";
 import DashboardTab from "./DashboardTab";
 import Login from "./Login";
@@ -9,7 +10,7 @@ import SimulatorTab from "./SimulatorTab";
 import StagesTab from "./StagesTab";
 import TelegramTab from "./TelegramTab";
 
-type Tab = "dashboard" | "stages" | "videos" | "telegram" | "simulator";
+type Tab = "dashboard" | "stages" | "videos" | "telegram" | "channels" | "simulator";
 
 export default function App() {
   const { t } = useTranslation();
@@ -51,6 +52,9 @@ export default function App() {
         <button className={`tab ${tab === "telegram" ? "active" : ""}`} onClick={() => setTab("telegram")}>
           {t("tabs.telegram")}
         </button>
+        <button className={`tab ${tab === "channels" ? "active" : ""}`} onClick={() => setTab("channels")}>
+          {t("tabs.channels")}
+        </button>
         <button className={`tab ${tab === "simulator" ? "active" : ""}`} onClick={() => setTab("simulator")}>
           {t("tabs.simulator")}
         </button>
@@ -60,6 +64,7 @@ export default function App() {
       {tab === "stages" && <StagesTab />}
       {tab === "videos" && <ModelTab />}
       {tab === "telegram" && <TelegramTab />}
+      {tab === "channels" && <ChannelsTab />}
       {tab === "simulator" && <SimulatorTab />}
     </div>
   );

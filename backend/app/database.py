@@ -70,6 +70,34 @@ class Conversation(Base):
     account: Mapped["TelegramAccount"] = relationship(back_populates="conversations")
 
 
+class ChannelAccount(Base):
+    __tablename__ = "channel_accounts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), default="Channel Manager")
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    session_string: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_connected: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    channels: Mapped[list["TelegramChannel"]] = relationship(back_populates="channel_account", cascade="all, delete-orphan")
+
+
+class TelegramChannel(Base):
+    __tablename__ = "telegram_channels"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    channel_account_id: Mapped[int] = mapped_column(ForeignKey("channel_accounts.id"), index=True)
+    channel_id: Mapped[int] = mapped_column(BigInteger, unique=True)
+    title: Mapped[str] = mapped_column(String(255))
+    username: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    subscribers_count: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    channel_account: Mapped["ChannelAccount"] = relationship(back_populates="channels")
+
+
 class SentMessageLog(Base):
     __tablename__ = "sent_message_logs"
 
