@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, create_engine
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
 from app.config import settings
@@ -60,6 +60,7 @@ class Conversation(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     account_id: Mapped[int] = mapped_column(ForeignKey("telegram_accounts.id"), index=True)
     telegram_user_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    access_hash: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     display_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     last_user_message_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     steps_sent: Mapped[int] = mapped_column(Integer, default=0)
@@ -117,6 +118,16 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
+    # Add columns that create_all won't add to existing tables
+    with engine.connect() as conn:
+        for col, typ in [
+            ("access_hash", "BIGINT"),
+        ]:
+            try:
+                conn.execute(text(f"ALTER TABLE conversations ADD COLUMN {col} {typ}"))
+                conn.commit()
+            except Exception:
+                conn.rollback()
 
 
 def get_db():

@@ -7,6 +7,7 @@ from sqlalchemy import func
 from telethon import TelegramClient, events
 from telethon.errors import SessionPasswordNeededError
 from telethon.sessions import StringSession
+from telethon.tl.types import InputPeerUser
 
 from app.config import settings
 from app.database import (
@@ -76,8 +77,28 @@ class TelegramService:
             ).all()
             for account in accounts:
                 try:
-                    await self.get_client_for_account(account)
+                    client = await self.get_client_for_account(account)
                     logger.info("Connected account %s (%s)", account.id, account.name)
+                    # Backfill access_hash for conversations missing it
+                    if client:
+                        missing = db.query(Conversation).filter(
+                            Conversation.account_id == account.id,
+                            Conversation.access_hash.is_(None),
+                        ).all()
+                        if missing:
+                            logger.info("Backfilling access_hash for %d conversations", len(missing))
+                            async for dialog in client.iter_dialogs():
+                                if not dialog.is_user:
+                                    continue
+                                entity = dialog.entity
+                                uid = entity.id
+                                ahash = getattr(entity, "access_hash", None)
+                                if ahash:
+                                    for conv in missing:
+                                        if conv.telegram_user_id == uid:
+                                            conv.access_hash = ahash
+                                            break
+                            db.commit()
                 except Exception:
                     logger.exception("Failed to connect account %s", account.id)
         finally:
@@ -127,10 +148,12 @@ class TelegramService:
                     .one_or_none()
                 )
                 now = datetime.utcnow()
+                sender_hash = getattr(sender, "access_hash", None)
                 if conversation is None:
                     conversation = Conversation(
                         account_id=account_id,
                         telegram_user_id=user_id,
+                        access_hash=sender_hash,
                         display_name=display_name,
                         last_user_message_at=now,
                         steps_sent=0,
@@ -141,6 +164,8 @@ class TelegramService:
                     conversation.display_name = display_name or conversation.display_name
                     conversation.steps_sent = 0
                     conversation.last_follow_up_at = None
+                    if sender_hash and not conversation.access_hash:
+                        conversation.access_hash = sender_hash
 
                 if text.lower() in {"stop", "unsubscribe", "/stop"}:
                     conversation.opted_out = True
@@ -603,11 +628,14 @@ class TelegramService:
                     conversation = Conversation(
                         account_id=account_id,
                         telegram_user_id=user_id,
+                        access_hash=getattr(entity, "access_hash", None),
                         display_name=display_name,
                         last_user_message_at=last_user_msg_at,
                         steps_sent=0,
                     )
                     db.add(conversation)
+                elif conversation.access_hash is None and getattr(entity, "access_hash", None):
+                    conversation.access_hash = entity.access_hash
 
                 # Analyze fan profile in background
                 if llm_ready():
@@ -753,11 +781,14 @@ class TelegramService:
 
                     # Send message
                     try:
-                        # Resolve entity first — needed for users imported from history
-                        try:
-                            entity = await client.get_input_entity(conversation.telegram_user_id)
-                        except ValueError:
-                            entity = await client.get_entity(conversation.telegram_user_id)
+                        # Use InputPeerUser with access_hash if available
+                        if conversation.access_hash:
+                            entity = InputPeerUser(conversation.telegram_user_id, conversation.access_hash)
+                        else:
+                            try:
+                                entity = await client.get_input_entity(conversation.telegram_user_id)
+                            except ValueError:
+                                entity = await client.get_entity(conversation.telegram_user_id)
                         await client.send_message(entity, message_text)
 
                         # Send video if selected
@@ -767,7 +798,7 @@ class TelegramService:
                                 try:
                                     tmp_path = download_video(video_obj.s3_key)
                                     await client.send_file(
-                                        conversation.telegram_user_id,
+                                        entity,
                                         tmp_path,
                                         caption="",
                                     )
