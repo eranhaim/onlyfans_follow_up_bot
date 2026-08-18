@@ -11,6 +11,8 @@ scheduler = AsyncIOScheduler()
 
 async def follow_up_job() -> None:
     try:
+        pending = telegram_service.count_pending()
+        logger.info("Follow-up job running — %s pending", pending)
         sent = await telegram_service.run_follow_ups()
         if sent:
             logger.info("Sent %s follow-up message(s)", sent)
