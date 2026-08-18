@@ -171,12 +171,12 @@ def start_session(body: StartBody, db: Session = Depends(get_db), _: str = Depen
         raise HTTPException(status_code=404, detail="Account not found")
     stages_q = (
         db.query(FollowUpStage)
-        .filter(FollowUpStage.account_id == body.account_id, FollowUpStage.is_active == True)  # noqa: E712
+        .filter(FollowUpStage.is_active == True)  # noqa: E712
         .order_by(FollowUpStage.position)
         .all()
     )
     if not stages_q:
-        raise HTTPException(status_code=400, detail="No active stages for this account")
+        raise HTTPException(status_code=400, detail="No active stages")
     videos_q = db.query(Video).filter(Video.account_id == body.account_id).all()
     stages = [
         {
