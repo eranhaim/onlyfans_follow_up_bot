@@ -73,27 +73,26 @@ async def stats(db: Session = Depends(get_db)) -> DashboardStats:
 
 @router.get("/stages", response_model=list[FollowUpStageOut], dependencies=[Depends(require_admin)])
 def list_stages(account_id: int | None = None, db: Session = Depends(get_db)) -> list[FollowUpStage]:
-    q = db.query(FollowUpStage)
-    if account_id is not None:
-        q = q.filter(FollowUpStage.account_id == account_id)
-    return q.order_by(FollowUpStage.account_id, FollowUpStage.position).all()
+    return db.query(FollowUpStage).order_by(FollowUpStage.position).all()
 
 
 @router.post("/stages", response_model=FollowUpStageOut, dependencies=[Depends(require_admin)])
 def create_stage(body: FollowUpStageCreate, db: Session = Depends(get_db)) -> FollowUpStage:
-    account = db.query(TelegramAccount).filter(TelegramAccount.id == body.account_id).one_or_none()
-    if account is None:
-        raise HTTPException(status_code=404, detail="Account not found")
+    # Stages are global — assign to first account for DB compatibility
+    account_id = body.account_id
+    if account_id is None:
+        first = db.query(TelegramAccount).order_by(TelegramAccount.id).first()
+        if first is None:
+            raise HTTPException(status_code=400, detail="No accounts exist yet")
+        account_id = first.id
 
     max_pos = (
-        db.query(func.max(FollowUpStage.position))
-        .filter(FollowUpStage.account_id == body.account_id)
-        .scalar()
+        db.query(func.max(FollowUpStage.position)).scalar()
     )
     position = 0 if max_pos is None else max_pos + 1
 
     stage = FollowUpStage(
-        account_id=body.account_id,
+        account_id=account_id,
         position=position,
         delay_hours=body.delay_hours,
         system_prompt=body.system_prompt,

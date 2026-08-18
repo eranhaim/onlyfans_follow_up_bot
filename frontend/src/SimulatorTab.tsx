@@ -122,6 +122,13 @@ export default function SimulatorTab() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [session?.messages]);
 
+  // Auto-start session when fan selected
+  useEffect(() => {
+    if (selectedAccountId !== null && selectedConvId !== null && !session && !loading) {
+      void startSession();
+    }
+  }, [selectedConvId]);
+
   async function startSession() {
     if (selectedAccountId === null || selectedConvId === null) return;
     setError("");
@@ -217,7 +224,10 @@ export default function SimulatorTab() {
             <label>{t("simulator.selectFan")}</label>
             <select
               value={selectedConvId ?? ""}
-              onChange={(e) => setSelectedConvId(e.target.value === "new" ? "new" : Number(e.target.value))}
+              onChange={(e) => {
+                const val = e.target.value === "new" ? "new" as const : Number(e.target.value);
+                setSelectedConvId(val);
+              }}
             >
               <option value="">{t("simulator.chooseFan")}</option>
               <option value="new">➕ {t("simulator.newFan")}</option>
@@ -229,13 +239,7 @@ export default function SimulatorTab() {
             </select>
           </div>
 
-          <button
-            className="btn primary"
-            onClick={startSession}
-            disabled={loading || selectedAccountId === null || selectedConvId === null}
-          >
-            {loading ? t("common.loading") : t("simulator.start")}
-          </button>
+          {loading && <p className="muted">{t("common.loading")}</p>}
         </div>
       )}
 

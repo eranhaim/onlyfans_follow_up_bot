@@ -646,21 +646,19 @@ class TelegramService:
 
             now = datetime.utcnow()
 
+            # Stages are global — shared across all accounts
+            stages = (
+                db.query(FollowUpStage)
+                .filter(FollowUpStage.is_active.is_(True))
+                .order_by(FollowUpStage.position)
+                .all()
+            )
+            if not stages:
+                return 0
+
             for account in accounts:
                 client = await self.get_client_for_account(account)
                 if client is None:
-                    continue
-
-                stages = (
-                    db.query(FollowUpStage)
-                    .filter(
-                        FollowUpStage.account_id == account.id,
-                        FollowUpStage.is_active.is_(True),
-                    )
-                    .order_by(FollowUpStage.position)
-                    .all()
-                )
-                if not stages:
                     continue
 
                 conversations = (
@@ -794,34 +792,26 @@ class TelegramService:
             now = datetime.utcnow()
             pending = 0
 
-            accounts = db.query(TelegramAccount).filter(
-                TelegramAccount.is_connected.is_(True),
-            ).all()
+            # Stages are global
+            stages = (
+                db.query(FollowUpStage)
+                .filter(FollowUpStage.is_active.is_(True))
+                .order_by(FollowUpStage.position)
+                .all()
+            )
+            if not stages:
+                return 0
 
-            for account in accounts:
-                stages = (
-                    db.query(FollowUpStage)
-                    .filter(
-                        FollowUpStage.account_id == account.id,
-                        FollowUpStage.is_active.is_(True),
-                    )
-                    .order_by(FollowUpStage.position)
-                    .all()
+            conversations = (
+                db.query(Conversation)
+                .filter(
+                    Conversation.opted_out.is_(False),
+                    Conversation.last_user_message_at.isnot(None),
                 )
-                if not stages:
-                    continue
+                .all()
+            )
 
-                conversations = (
-                    db.query(Conversation)
-                    .filter(
-                        Conversation.account_id == account.id,
-                        Conversation.opted_out.is_(False),
-                        Conversation.last_user_message_at.isnot(None),
-                    )
-                    .all()
-                )
-
-                for conversation in conversations:
+            for conversation in conversations:
                     if conversation.steps_sent >= len(stages):
                         continue
                     stage = stages[conversation.steps_sent]

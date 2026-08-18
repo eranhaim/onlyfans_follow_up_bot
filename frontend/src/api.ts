@@ -133,7 +133,7 @@ export const api = {
       accountId != null ? `/api/stages?account_id=${accountId}` : "/api/stages"
     ),
 
-  createStage: (data: { account_id: number; delay_hours: number; system_prompt: string; is_active: boolean }) =>
+  createStage: (data: { account_id?: number; delay_hours: number; system_prompt: string; is_active: boolean }) =>
     request<FollowUpStage>("/api/stages", { method: "POST", body: JSON.stringify(data) }),
 
   updateStage: (id: number, data: Partial<FollowUpStage>) =>

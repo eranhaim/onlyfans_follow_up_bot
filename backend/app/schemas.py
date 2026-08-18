@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 # --- Follow-Up Stages (per account) ---
 
 class FollowUpStageCreate(BaseModel):
-    account_id: int
+    account_id: int | None = None
     delay_hours: float = Field(gt=0)
     system_prompt: str = ""
     is_active: bool = True

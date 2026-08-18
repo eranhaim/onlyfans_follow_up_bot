@@ -1,34 +1,19 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, FollowUpStage, TelegramAccount } from "./api";
+import { api, FollowUpStage } from "./api";
 
 export default function StagesTab() {
   const { t } = useTranslation();
-  const [accounts, setAccounts] = useState<TelegramAccount[]>([]);
-  const [selectedAccount, setSelectedAccount] = useState<number | null>(null);
   const [stages, setStages] = useState<FollowUpStage[]>([]);
   const [delayHours, setDelayHours] = useState("24");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
-  async function loadAccounts() {
-    try {
-      const accs = await api.listTelegramAccounts();
-      setAccounts(accs);
-      if (accs.length > 0 && selectedAccount === null) {
-        setSelectedAccount(accs[0].id);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("common.error"));
-    }
-  }
-
   async function loadStages() {
-    if (selectedAccount === null) return;
     setLoading(true);
     try {
-      setStages(await api.listStages(selectedAccount));
+      setStages(await api.listStages());
     } catch (err) {
       setError(err instanceof Error ? err.message : t("stages.loadFailed"));
     } finally {
@@ -37,22 +22,14 @@ export default function StagesTab() {
   }
 
   useEffect(() => {
-    void loadAccounts();
+    void loadStages();
   }, []);
-
-  useEffect(() => {
-    if (selectedAccount !== null) {
-      void loadStages();
-    }
-  }, [selectedAccount]);
 
   async function addStage(e: FormEvent) {
     e.preventDefault();
-    if (selectedAccount === null) return;
     setError("");
     try {
       await api.createStage({
-        account_id: selectedAccount,
         delay_hours: Number(delayHours),
         system_prompt: systemPrompt,
         is_active: true,
@@ -91,23 +68,6 @@ export default function StagesTab() {
 
   return (
     <div>
-      <div className="card">
-        <h2>{t("stages.title")}</h2>
-        <div className="field">
-          <label>{t("stages.selectAccount")}</label>
-          <select
-            value={selectedAccount ?? ""}
-            onChange={(e) => setSelectedAccount(Number(e.target.value))}
-          >
-            {accounts.map((acc) => (
-              <option key={acc.id} value={acc.id}>
-                {acc.name} ({acc.phone || "—"})
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
       <div className="card">
         <h2>{t("stages.sequenceTitle")}</h2>
         <p className="muted">{t("stages.sequenceHint")}</p>
