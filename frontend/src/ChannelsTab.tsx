@@ -330,7 +330,7 @@ export default function ChannelsTab() {
             </button>
           </div>
 
-          {loadingChannels ? (
+          {loadingChannels || syncing ? (
             <p className="muted">{t("common.loading")}</p>
           ) : channels.length === 0 ? (
             <p className="muted">{t("channels.noChannels")}</p>
