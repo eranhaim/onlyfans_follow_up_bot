@@ -753,7 +753,12 @@ class TelegramService:
 
                     # Send message
                     try:
-                        await client.send_message(conversation.telegram_user_id, message_text)
+                        # Resolve entity first — needed for users imported from history
+                        try:
+                            entity = await client.get_input_entity(conversation.telegram_user_id)
+                        except ValueError:
+                            entity = await client.get_entity(conversation.telegram_user_id)
+                        await client.send_message(entity, message_text)
 
                         # Send video if selected
                         if video_id and s3_ready():
