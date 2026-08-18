@@ -50,6 +50,7 @@
     "sent24h": "Sent (24h)",
     "recentConversations": "Recent conversations",
     "user": "User",
+    "model": "Model",
     "lastMessage": "Last message",
     "stepsSent": "Steps sent",
     "lastFollowUp": "Last follow-up",

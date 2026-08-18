@@ -1,11 +1,9 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Trans, useTranslation } from "react-i18next";
+import { useTranslation } from "react-i18next";
 import { api, TelegramAccount } from "./api";
 
 export default function TelegramTab() {
   const { t, i18n } = useTranslation();
-  const [connected, setConnected] = useState(false);
-  const [username, setUsername] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<TelegramAccount[]>([]);
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -37,9 +35,6 @@ export default function TelegramTab() {
   async function refresh() {
     setRefreshing(true);
     try {
-      const status = await api.telegramStatus();
-      setConnected(status.connected);
-      setUsername(status.username || status.first_name || null);
       await loadAccounts();
     } catch (err) {
       setError(err instanceof Error ? err.message : t("telegram.loadFailed"));
@@ -125,34 +120,17 @@ export default function TelegramTab() {
   return (
     <div>
       <div className="card">
-        <h2>{t("telegram.accountTitle")}</h2>
-        {connected ? (
-          <p>
-            {username ? (
-              <Trans i18nKey="telegram.connectedAs" values={{ username }} components={{ strong: <strong /> }} />
-            ) : (
-              <Trans i18nKey="telegram.connectedAsFallback" components={{ strong: <strong /> }} />
-            )}
-          </p>
-        ) : (
-          <p className="muted">
-            <Trans i18nKey="telegram.connectHint" components={{ code: <code /> }} />
-          </p>
-        )}
-        <div className="row" style={{ marginTop: 12 }}>
+        <h2>{t("telegram.linkedAccounts")}</h2>
+        <div className="row" style={{ marginBottom: 12 }}>
           <button className="btn secondary" onClick={() => void refresh()} disabled={refreshing}>
             {refreshing ? t("common.loading") : t("telegram.refreshStatus")}
           </button>
-          <button className="btn" onClick={() => void runNow()} disabled={running || !connected}>
+          <button className="btn" onClick={() => void runNow()} disabled={running || accounts.length === 0}>
             {running ? t("telegram.running") : t("telegram.runNow")}
           </button>
         </div>
-        {info && <p className="muted" style={{ marginTop: 12 }}>{info}</p>}
+        {info && <p className="muted" style={{ marginBottom: 8 }}>{info}</p>}
         {error && <div className="error">{error}</div>}
-      </div>
-
-      <div className="card">
-        <h2>{t("telegram.linkedAccounts")}</h2>
         {loadingAccounts ? (
           <p className="muted">{t("common.loading")}</p>
         ) : accounts.length === 0 ? (

@@ -81,6 +81,7 @@ export default function DashboardTab() {
           <thead>
             <tr>
               <th>{t("dashboard.user")}</th>
+              <th>{t("dashboard.model")}</th>
               <th>{t("dashboard.lastMessage")}</th>
               <th>{t("dashboard.stepsSent")}</th>
               <th>{t("dashboard.lastFollowUp")}</th>
@@ -94,6 +95,7 @@ export default function DashboardTab() {
                   {c.display_name || c.telegram_user_id}
                   {c.opted_out && <span className="badge off"> {t("dashboard.optedOut")}</span>}
                 </td>
+                <td>{c.account_name}</td>
                 <td>{fmt(c.last_user_message_at)}</td>
                 <td>{c.steps_sent}</td>
                 <td>{fmt(c.last_follow_up_at)}</td>

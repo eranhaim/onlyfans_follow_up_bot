@@ -65,6 +65,7 @@ export type DashboardStats = {
 export type Conversation = {
   id: number;
   account_id: number;
+  account_name: string;
   telegram_user_id: number;
   display_name: string | null;
   last_user_message_at: string | null;

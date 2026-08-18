@@ -231,12 +231,28 @@ def delete_video_endpoint(video_id: int, db: Session = Depends(get_db)) -> dict:
 
 # --- Conversations ---
 
-@router.get("/conversations", response_model=list[ConversationOut], dependencies=[Depends(require_admin)])
-def list_conversations(account_id: int | None = None, db: Session = Depends(get_db)) -> list[Conversation]:
-    q = db.query(Conversation)
+@router.get("/conversations", dependencies=[Depends(require_admin)])
+def list_conversations(account_id: int | None = None, db: Session = Depends(get_db)):
+    q = db.query(Conversation, TelegramAccount.name).join(
+        TelegramAccount, Conversation.account_id == TelegramAccount.id
+    )
     if account_id is not None:
         q = q.filter(Conversation.account_id == account_id)
-    return q.order_by(Conversation.last_user_message_at.desc().nullslast()).limit(200).all()
+    rows = q.order_by(Conversation.last_user_message_at.desc().nullslast()).limit(200).all()
+    return [
+        {
+            "id": c.id,
+            "account_id": c.account_id,
+            "account_name": name,
+            "telegram_user_id": c.telegram_user_id,
+            "display_name": c.display_name,
+            "last_user_message_at": c.last_user_message_at,
+            "steps_sent": c.steps_sent,
+            "last_follow_up_at": c.last_follow_up_at,
+            "opted_out": c.opted_out,
+        }
+        for c, name in rows
+    ]
 
 
 @router.get("/conversations/{conversation_id}/fan-profile", dependencies=[Depends(require_admin)])
