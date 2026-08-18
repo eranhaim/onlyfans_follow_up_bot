@@ -210,7 +210,7 @@ export default function SimulatorTab() {
             <label>{t("simulator.selectModel")}</label>
             <select
               value={selectedAccountId ?? ""}
-              onChange={(e) => setSelectedAccountId(Number(e.target.value))}
+              onChange={(e) => { setSelectedAccountId(Number(e.target.value)); setSelectedConvId(null); }}
             >
               {accounts.map((a) => (
                 <option key={a.id} value={a.id}>
@@ -231,9 +231,11 @@ export default function SimulatorTab() {
             >
               <option value="">{t("simulator.chooseFan")}</option>
               <option value="new">➕ {t("simulator.newFan")}</option>
-              {conversations.map((c) => (
+              {conversations
+                .filter((c) => selectedAccountId === null || c.account_id === selectedAccountId)
+                .map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.display_name} ({c.account_name})
+                  {c.display_name}
                 </option>
               ))}
             </select>

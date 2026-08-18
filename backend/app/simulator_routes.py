@@ -155,6 +155,7 @@ def list_conversations_for_sim(db: Session = Depends(get_db), _: str = Depends(r
     return [
         {
             "id": c.Conversation.id,
+            "account_id": c.Conversation.account_id,
             "display_name": c.Conversation.display_name or str(c.Conversation.telegram_user_id),
             "account_name": c.name,
             "steps_sent": c.Conversation.steps_sent,

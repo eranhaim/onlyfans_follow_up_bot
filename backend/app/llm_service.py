@@ -467,17 +467,24 @@ def run_follow_up_graph(
             "video_id": None,
         })
 
+        final_msg = result.get("final_message", "")
+
         _last_debug.clear()
         _last_debug.update({
             "analysis": result.get("analysis", {}),
             "attempts": result.get("attempts", []),
             "retry_count": result.get("retry_count", 0),
             "last_validation": result.get("last_validation", {}),
-            "final_message": result.get("final_message", ""),
+            "final_message": final_msg,
         })
 
+        if not final_msg:
+            logger.warning("LangGraph returned empty final_message, state: %s", {
+                k: result.get(k) for k in ("retry_count", "last_validation", "last_fail_reason", "attempts")
+            })
+
         return {
-            "message": result.get("final_message") or "Hey! 💕",
+            "message": final_msg or "Hey! 💕",
             "video_id": result.get("video_id"),
         }
     except Exception:

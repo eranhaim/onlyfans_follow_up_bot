@@ -729,14 +729,27 @@ class TelegramService:
                             )
                             message_text = result["message"]
                             video_id = result.get("video_id")
+                            logger.info(
+                                "LLM generated for conv %s: %r (video_id=%s)",
+                                conversation.id, message_text[:80], video_id,
+                            )
                         except Exception:
                             logger.exception(
                                 "LLM generation failed for conversation %s, stage %s",
                                 conversation.id, stage.id,
                             )
+                    else:
+                        logger.warning(
+                            "Skipping LLM for conv %s — llm_ready=%s, prompt_empty=%s",
+                            conversation.id, llm_ready(), not stage.system_prompt.strip(),
+                        )
 
                     if not message_text:
-                        message_text = f"Hey! 💕"
+                        logger.warning(
+                            "Falling back to 'Hey! 💕' for conv %s (message_text was %r)",
+                            conversation.id, message_text,
+                        )
+                        message_text = "Hey! 💕"
 
                     # Send message
                     try:

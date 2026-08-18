@@ -268,6 +268,7 @@ export type SimMessage = {
 
 export type SimConversation = {
   id: number;
+  account_id: number;
   display_name: string;
   account_name: string;
   steps_sent: number;
