@@ -265,6 +265,9 @@ def _node_generate(state: FollowUpState) -> dict:
     name_to_use = analysis.get("name_to_use", "").strip()
     name_instruction = f"- If it feels natural, use his name: {name_to_use}" if name_to_use else "- Do not use a name (unknown)"
 
+    entry_point = analysis.get("entry_point", "").strip()
+    has_personal_info = entry_point and entry_point not in ("—", "", "unknown", "none", "nothing found")
+
     system = (
         f"You are an OnlyFans model sending a follow-up message to a fan who went quiet.\n\n"
         f"WHO YOU ARE:\n{state['personality'].strip()}\n\n"
@@ -273,28 +276,48 @@ def _node_generate(state: FollowUpState) -> dict:
         f"- Never mention prices or subscriptions\n"
         f"- Write ONLY in {language}\n"
         f"- 1-2 sentences max\n"
-        f"- Do NOT start with 'היי', 'Hey', 'Hi', or 'שלום'\n"
         f"{name_instruction}\n\n"
-        f"WHAT TO WRITE:\n"
-        f"- Tone: {analysis.get('tone', 'warm')}\n"
-        f"- Reference THIS specifically: {analysis.get('entry_point', '—')}\n"
-        f"- Speak to this need: {analysis.get('angle', '—')}\n"
-        f"- Avoid: {analysis.get('avoid', '—')}\n"
-        f"- Goal: {state['stage_prompt']}\n"
-        f"{retry_note}\n\n"
-        + (
-            f"A VIDEO WILL BE ATTACHED: '{state['chosen_video'].get('description', '')}'. "
-            f"Reference it naturally in your message.\n"
-            if state.get("chosen_video") else ""
-        )
-        + f'Respond ONLY in JSON: {{"message": "..."}}'
     )
 
-    trigger = (
-        "--- The conversation above happened days ago. The fan has been silent since. ---\n\n"
-        "Write a fresh follow-up message. It must feel spontaneous — like you just thought of him. "
-        "Reference the specific entry point from your analysis. JSON only."
-    )
+    if has_personal_info:
+        system += (
+            f"WHAT TO WRITE:\n"
+            f"- Tone: {analysis.get('tone', 'warm')}\n"
+            f"- Reference THIS specifically: {entry_point}\n"
+            f"- Speak to this need: {analysis.get('angle', '—')}\n"
+            f"- Avoid: {analysis.get('avoid', '—')}\n"
+            f"- Goal: {state['stage_prompt']}\n"
+            f"- Do NOT start with 'היי', 'Hey', 'Hi', or 'שלום'\n"
+            f"{retry_note}\n\n"
+        )
+    else:
+        system += (
+            f"You don't know much about this fan yet.\n"
+            f"Send a SHORT, casual, warm message — like 'חסר לי 🥺', 'איפה נעלמת?', "
+            f"'I miss talking to you', 'where did you disappear to? 💕'\n"
+            f"Keep it 1 sentence. Be warm and human, not salesy.\n"
+            f"- Goal: {state['stage_prompt']}\n"
+            f"{retry_note}\n\n"
+        )
+
+    if state.get("chosen_video"):
+        system += (
+            f"A VIDEO WILL BE ATTACHED: '{state['chosen_video'].get('description', '')}'. "
+            f"Reference it naturally in your message.\n"
+        )
+    system += f'Respond ONLY in JSON: {{"message": "..."}}'
+
+    if has_personal_info:
+        trigger = (
+            "--- The conversation above happened days ago. The fan has been silent since. ---\n\n"
+            "Write a fresh follow-up message. It must feel spontaneous — like you just thought of him. "
+            "Reference the specific entry point from your analysis. JSON only."
+        )
+    else:
+        trigger = (
+            "--- You don't have much history with this fan. ---\n\n"
+            "Send a short warm message. Keep it casual and human. JSON only."
+        )
 
     messages: list = [SystemMessage(content=system)] + history_messages + [HumanMessage(content=trigger)]
 
@@ -336,21 +359,25 @@ def _node_validate(state: FollowUpState) -> dict:
     language = analysis.get("language", "Hebrew")
     entry_point = analysis.get("entry_point", "")
 
+    has_entry = entry_point and entry_point not in ("—", "", "unknown", "none", "nothing found")
+
     system = (
         "You are a quality checker for follow-up messages sent by OnlyFans models.\n"
         "Evaluate the message strictly. Return ONLY JSON:\n"
         '{"pass": true/false, "reason": "why it failed, or empty string if passed"}\n\n'
         "FAIL if any of these:\n"
-        f"- Does NOT reference or relate to: '{entry_point}'\n"
+    )
+    if has_entry:
+        system += f"- Does NOT reference or relate to: '{entry_point}'\n"
+    system += (
         f"- Not written entirely in {language} (mixing languages e.g. English words inside Hebrew sentence = FAIL)\n"
-        "- Starts with 'היי', 'Hey', 'Hi', 'שלום', 'Hello' as the very first word\n"
         "- Sounds like a generic bot template or sales pitch\n"
         "- Longer than 3 sentences\n"
         "- Makes promises about specific content\n"
         "- Mentions prices or subscriptions\n\n"
         "PASS if:\n"
         "- Starts with the fan's name — that's fine and encouraged\n"
-        "- Feels personal and human, references something real from his life\n"
+        "- Feels personal and human\n"
         "- Written purely in the correct language with no foreign words"
     )
 
@@ -573,20 +600,36 @@ def generate_follow_up(
     )
 
     # 3. מה ידוע על הפאן — הכי חשוב
+    has_personal = False
     if fan_profile:
+        personal = fan_profile.get("personal_details", fan_profile.get("notes", "")).strip()
+        hooks = fan_profile.get("conversation_hooks", "").strip()
+        has_personal = bool(personal or hooks)
+
         fan_block = "WHO YOU'RE WRITING TO:\n"
         if fan_profile.get("first_name"):
             fan_block += f"- His name: {fan_profile['first_name']}\n"
         fan_block += f"- Personality: {fan_profile.get('personality_type', '—')}\n"
         fan_block += f"- What works on him: {fan_profile.get('triggers', '—')}\n"
-        fan_block += f"- About him: {fan_profile.get('personal_details', fan_profile.get('notes', '—'))}\n"
-        fan_block += f"- Things to bring up: {fan_profile.get('conversation_hooks', '—')}\n"
-        fan_block += (
-            "\nCRITICAL: Your message MUST reference something real and specific from his life or your conversation. "
-            "Do NOT send a generic message. Make him feel like you actually remember him.\n\n"
-        )
+        fan_block += f"- About him: {personal or '—'}\n"
+        fan_block += f"- Things to bring up: {hooks or '—'}\n"
+        if has_personal:
+            fan_block += (
+                "\nCRITICAL: Your message MUST reference something real and specific from his life or your conversation. "
+                "Do NOT send a generic message. Make him feel like you actually remember him.\n\n"
+            )
+        else:
+            fan_block += (
+                "\nYou don't know much about this fan yet. Send a short, warm, casual message — "
+                "like 'חסר לי 🥺', 'איפה נעלמת?', 'I miss talking to you'. "
+                "Keep it 1 sentence. Be warm and human.\n\n"
+            )
     else:
-        fan_block = ""
+        fan_block = (
+            "You don't know this fan yet. Send a short, warm, casual message — "
+            "like 'חסר לי 🥺', 'איפה נעלמת?', 'I miss talking to you'. "
+            "Detect the language from the chat history. Keep it 1 sentence.\n\n"
+        )
 
     # 4. מטרת ה-stage
     goal_block = f"YOUR GOAL FOR THIS MESSAGE:\n{system_prompt.strip()}\n\n"
@@ -627,16 +670,25 @@ def generate_follow_up(
         else:
             messages.append(AIMessage(content=content))
 
-    messages.append(HumanMessage(
-        content=(
-            "--- The conversation above happened in the past. The fan has been silent since then. ---\n\n"
-            "Now write a NEW standalone follow-up message from the model. "
-            "This is NOT a reply to his last message — it is a fresh message she is sending out of the blue, days later. "
-            "Reference something personal and specific from his life (job, hobby, something he said) to make it feel real. "
-            "Do NOT start with 'היי' or 'Hey' every time. "
-            "Keep it 1-2 sentences. JSON only."
-        )
-    ))
+    if has_personal:
+        messages.append(HumanMessage(
+            content=(
+                "--- The conversation above happened in the past. The fan has been silent since then. ---\n\n"
+                "Now write a NEW standalone follow-up message from the model. "
+                "This is NOT a reply to his last message — it is a fresh message she is sending out of the blue, days later. "
+                "Reference something personal and specific from his life (job, hobby, something he said) to make it feel real. "
+                "Do NOT start with 'היי' or 'Hey' every time. "
+                "Keep it 1-2 sentences. JSON only."
+            )
+        ))
+    else:
+        messages.append(HumanMessage(
+            content=(
+                "--- You don't have much history with this fan. ---\n\n"
+                "Send a short warm casual message. Detect the language from the chat or use the fan profile language. "
+                "Keep it 1 sentence. JSON only."
+            )
+        ))
 
     response = llm.invoke(messages)
     raw = response.content.strip()
