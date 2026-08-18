@@ -259,6 +259,16 @@ def opt_out_conversation(conversation_id: int, db: Session = Depends(get_db)) ->
     return {"ok": True}
 
 
+@router.post("/conversations/{conversation_id}/skip-step", dependencies=[Depends(require_admin)])
+def skip_step_conversation(conversation_id: int, db: Session = Depends(get_db)) -> dict:
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).one_or_none()
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    conversation.steps_sent += 1
+    db.commit()
+    return {"ok": True, "steps_sent": conversation.steps_sent}
+
+
 @router.post("/conversations/{conversation_id}/opt-in", dependencies=[Depends(require_admin)])
 def opt_in_conversation(conversation_id: int, db: Session = Depends(get_db)) -> dict:
     conversation = db.query(Conversation).filter(Conversation.id == conversation_id).one_or_none()

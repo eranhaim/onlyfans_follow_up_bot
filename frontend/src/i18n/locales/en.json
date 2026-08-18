@@ -56,6 +56,7 @@
     "optedOut": "opted out",
     "optOut": "Opt out",
     "optIn": "Resubscribe",
+    "skipStep": "Skip step",
     "optOutConfirm": "Remove this fan from the follow-up list?",
     "details": "Details",
     "noConversations": "No conversations tracked yet.",

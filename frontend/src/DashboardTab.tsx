@@ -42,6 +42,11 @@ export default function DashboardTab() {
     await load();
   }
 
+  async function skipStep(id: number) {
+    await api.skipStep(id);
+    await load();
+  }
+
   return (
     <div>
       {stats && (
@@ -93,15 +98,22 @@ export default function DashboardTab() {
                 <td>{c.steps_sent}</td>
                 <td>{fmt(c.last_follow_up_at)}</td>
                 <td>
-                  {c.opted_out ? (
-                    <button className="btn" onClick={() => void optIn(c.id)}>
-                      {t("dashboard.optIn")}
-                    </button>
-                  ) : (
-                    <button className="btn danger" onClick={() => void optOut(c.id)}>
-                      {t("dashboard.optOut")}
-                    </button>
-                  )}
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {c.opted_out ? (
+                      <button className="btn" onClick={() => void optIn(c.id)}>
+                        {t("dashboard.optIn")}
+                      </button>
+                    ) : (
+                      <>
+                        <button className="btn secondary" onClick={() => void skipStep(c.id)}>
+                          {t("dashboard.skipStep")}
+                        </button>
+                        <button className="btn danger" onClick={() => void optOut(c.id)}>
+                          {t("dashboard.optOut")}
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

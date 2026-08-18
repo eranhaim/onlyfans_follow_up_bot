@@ -179,6 +179,9 @@ export const api = {
   optIn: (id: number) =>
     request<{ ok: boolean }>(`/api/conversations/${id}/opt-in`, { method: "POST" }),
 
+  skipStep: (id: number) =>
+    request<{ ok: boolean }>(`/api/conversations/${id}/skip-step`, { method: "POST" }),
+
   fanProfile: (id: number) =>
     request<FanProfile>(`/api/conversations/${id}/fan-profile`),
 
