@@ -15,6 +15,15 @@ logger = logging.getLogger(__name__)
 _last_debug: dict = {}
 
 
+def _s(val) -> str:
+    """Safely convert any fan-profile value to a stripped string."""
+    if val is None:
+        return ""
+    if isinstance(val, list):
+        return ", ".join(str(v) for v in val)
+    return str(val).strip()
+
+
 def get_last_debug() -> dict:
     return _last_debug
 
@@ -75,12 +84,12 @@ def _make_search_tool(account_id: int, telegram_user_id: int):
 
 def _node_analyze(state: FollowUpState) -> dict:
     fan = state["fan_profile"] or {}
-    first_name = fan.get("first_name", "").strip()
-    personal_details = fan.get("personal_details", "").strip()
-    conversation_hooks = fan.get("conversation_hooks", "").strip()
-    personality_type = fan.get("personality_type", "").strip()
-    triggers = fan.get("triggers", "").strip()
-    notes = fan.get("notes", "").strip()
+    first_name = _s(fan.get("first_name"))
+    personal_details = _s(fan.get("personal_details"))
+    conversation_hooks = _s(fan.get("conversation_hooks"))
+    personality_type = _s(fan.get("personality_type"))
+    triggers = _s(fan.get("triggers"))
+    notes = _s(fan.get("notes"))
 
     # שפה לפי 2 ההודעות האחרונות של הפן
     last_user_msgs = [
@@ -93,7 +102,7 @@ def _node_analyze(state: FollowUpState) -> dict:
         hebrew_chars = sum(1 for c in combined if "\u05d0" <= c <= "\u05ea")
         return "Hebrew" if hebrew_chars > len(combined) * 0.1 else "English"
 
-    language = _detect_language(last_user_msgs) if last_user_msgs else fan.get("language", "Hebrew").strip()
+    language = _detect_language(last_user_msgs) if last_user_msgs else _s(fan.get("language", "Hebrew")) or "Hebrew"
 
     stage_ctx = "first follow-up (gentle nudge)" if state["stage_index"] == 0 else f"follow-up #{state['stage_index'] + 1} — he didn't reply, use a completely different angle"
 
@@ -609,8 +618,8 @@ def generate_follow_up(
     # 3. מה ידוע על הפאן — הכי חשוב
     has_personal = False
     if fan_profile:
-        personal = fan_profile.get("personal_details", fan_profile.get("notes", "")).strip()
-        hooks = fan_profile.get("conversation_hooks", "").strip()
+        personal = _s(fan_profile.get("personal_details") or fan_profile.get("notes"))
+        hooks = _s(fan_profile.get("conversation_hooks"))
         has_personal = bool(personal or hooks)
 
         fan_block = "WHO YOU'RE WRITING TO:\n"
