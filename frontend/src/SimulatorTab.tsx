@@ -332,21 +332,28 @@ export default function SimulatorTab() {
           {/* Fast-forward */}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <span style={{ fontSize: 13, color: "#aaa" }}>{t("simulator.fastForward")}:</span>
-            {[1, 6, 24, 48].map((h) => (
+            {[
+              { label: "5m", hours: 5 / 60 },
+              { label: "15m", hours: 15 / 60 },
+              { label: "1h", hours: 1 },
+              { label: "6h", hours: 6 },
+              { label: "24h", hours: 24 },
+              { label: "48h", hours: 48 },
+            ].map((item) => (
               <button
-                key={h}
+                key={item.label}
                 className="btn secondary"
                 style={{ padding: "4px 10px", fontSize: 13 }}
-                onClick={() => advanceTime(h)}
+                onClick={() => advanceTime(item.hours)}
                 disabled={loading}
               >
-                +{h}h
+                +{item.label}
               </button>
             ))}
             <input
               type="number"
-              min="0.1"
-              step="0.5"
+              min="0.01"
+              step="0.1"
               value={advanceHours}
               onChange={(e) => setAdvanceHours(e.target.value)}
               disabled={loading}

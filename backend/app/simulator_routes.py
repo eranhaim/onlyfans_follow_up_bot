@@ -207,6 +207,8 @@ def start_session(body: StartBody, db: Session = Depends(get_db), _: str = Depen
             raise HTTPException(status_code=404, detail="Conversation not found")
         fan_display_name = conv.display_name
         last_user_message_at = conv.last_user_message_at
+        last_follow_up_at = conv.last_follow_up_at
+        steps_sent = conv.steps_sent
         fan_profile = get_fan_profile(conv.account_id, conv.telegram_user_id)
         history = get_chat_history(conv.account_id, conv.telegram_user_id)
         preloaded_messages = [
