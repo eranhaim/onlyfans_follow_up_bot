@@ -55,6 +55,7 @@
     "lastFollowUp": "Last follow-up",
     "optedOut": "opted out",
     "optOut": "Opt out",
+    "optIn": "Resubscribe",
     "optOutConfirm": "Remove this fan from the follow-up list?",
     "details": "Details",
     "noConversations": "No conversations tracked yet.",

@@ -259,6 +259,18 @@ def opt_out_conversation(conversation_id: int, db: Session = Depends(get_db)) ->
     return {"ok": True}
 
 
+@router.post("/conversations/{conversation_id}/opt-in", dependencies=[Depends(require_admin)])
+def opt_in_conversation(conversation_id: int, db: Session = Depends(get_db)) -> dict:
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).one_or_none()
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    conversation.opted_out = False
+    conversation.steps_sent = 0
+    conversation.last_follow_up_at = None
+    db.commit()
+    return {"ok": True}
+
+
 # --- Telegram Accounts ---
 
 @router.get("/telegram/accounts", response_model=list[TelegramAccountOut], dependencies=[Depends(require_admin)])

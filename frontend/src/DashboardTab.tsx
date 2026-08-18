@@ -110,6 +110,11 @@ export default function DashboardTab() {
     await load();
   }
 
+  async function optIn(id: number) {
+    await api.optIn(id);
+    await load();
+  }
+
   return (
     <div>
       {stats && (
@@ -168,7 +173,11 @@ export default function DashboardTab() {
                     >
                       {t("dashboard.details")}
                     </button>
-                    {!c.opted_out && (
+                    {c.opted_out ? (
+                      <button className="btn" onClick={() => void optIn(c.id)}>
+                        {t("dashboard.optIn")}
+                      </button>
+                    ) : (
                       <button className="btn danger" onClick={() => void optOut(c.id)}>
                         {t("dashboard.optOut")}
                       </button>

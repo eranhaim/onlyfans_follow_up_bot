@@ -176,6 +176,9 @@ export const api = {
   optOut: (id: number) =>
     request<{ ok: boolean }>(`/api/conversations/${id}/opt-out`, { method: "POST" }),
 
+  optIn: (id: number) =>
+    request<{ ok: boolean }>(`/api/conversations/${id}/opt-in`, { method: "POST" }),
+
   fanProfile: (id: number) =>
     request<FanProfile>(`/api/conversations/${id}/fan-profile`),
 
